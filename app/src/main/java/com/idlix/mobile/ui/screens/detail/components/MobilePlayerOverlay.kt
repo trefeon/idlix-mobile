@@ -1,6 +1,7 @@
 package com.idlix.mobile.ui.screens.detail.components
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
@@ -62,6 +63,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -344,7 +346,8 @@ fun MobilePlayerOverlay(
                             }
                         )
                 ) {
-                    // Scrub time-tooltip: follows the thumb while dragging.
+                    // Scrub time-tooltip pill: current / total, follows the thumb while dragging.
+                    // Inside the controls AnimatedVisibility, so it fades with the chrome.
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -353,10 +356,11 @@ fun MobilePlayerOverlay(
                         if (isScrubbing && durationMs > 0L) {
                             val fraction = (effectivePos.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
                             Text(
-                                text = formatDuration(effectivePos),
+                                text = "${formatDuration(effectivePos)} / ${formatDuration(durationMs)}",
                                 color = TextWhite,
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
+                                style = TextStyle(fontFeatureSettings = "tnum"),
                                 modifier = Modifier
                                     .align(BiasAlignment(horizontalBias = -1f + 2f * fraction, verticalBias = 0f))
                                     .clip(RoundedCornerShape(6.dp))
@@ -365,10 +369,18 @@ fun MobilePlayerOverlay(
                             )
                         }
                     }
+                    // Touch target is 48dp tall; the visual rail stays a slim 4dp centered
+                    // inside it, so scrubbing is forgiving without a chunky bar.
+                    // All three rails share height (4dp), clip (2dp), parent and insets,
+                    // so base/buffered/played stay pixel-aligned with no 1px steps.
+                    val thumbSize by animateDpAsState(
+                        targetValue = if (isScrubbing) 18.dp else 14.dp,
+                        label = "seekThumb"
+                    )
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(28.dp),
+                            .height(48.dp),
                         contentAlignment = Alignment.Center
                     ) {
                         // Base rail.
@@ -379,7 +391,7 @@ fun MobilePlayerOverlay(
                                 .clip(RoundedCornerShape(2.dp))
                                 .background(Color.White.copy(alpha = 0.3f))
                         )
-                        // Buffered rail (YouTube-style gray behind the red played rail).
+                        // Buffered rail (YouTube-style gray under the red played rail).
                         if (durationMs > 0L && bufferedPositionMs > 0L) {
                             val bufferedFraction =
                                 (bufferedPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
@@ -390,6 +402,21 @@ fun MobilePlayerOverlay(
                                     .align(Alignment.CenterStart)
                                     .clip(RoundedCornerShape(2.dp))
                                     .background(Color.White.copy(alpha = 0.55f))
+                            )
+                        }
+                        // Played rail: drawn explicitly (same 4dp / 2dp / insets) so it
+                        // aligns exactly with base + buffered; the Slider's own tracks
+                        // stay transparent and it only provides semantics + thumb.
+                        if (durationMs > 0L) {
+                            val playedFraction =
+                                (effectivePos.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(fraction = playedFraction)
+                                    .height(4.dp)
+                                    .align(Alignment.CenterStart)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(IdlixRed)
                             )
                         }
                         Slider(
@@ -407,11 +434,31 @@ fun MobilePlayerOverlay(
                             valueRange = 0f..(durationMs.coerceAtLeast(1L).toFloat()),
                             colors = SliderDefaults.colors(
                                 thumbColor = IdlixRed,
-                                activeTrackColor = IdlixRed,
-                                activeTickColor = IdlixRed,
+                                activeTrackColor = Color.Transparent,
+                                activeTickColor = Color.Transparent,
                                 inactiveTrackColor = Color.Transparent,
                                 inactiveTickColor = Color.Transparent
                             ),
+                            thumb = { _ ->
+                                Box(contentAlignment = Alignment.Center) {
+                                    // Halo ring while scrubbing.
+                                    if (isScrubbing) {
+                                        Box(
+                                            modifier = Modifier
+                                                .size(thumbSize + 12.dp)
+                                                .background(
+                                                    IdlixRed.copy(alpha = 0.25f),
+                                                    CircleShape
+                                                )
+                                        )
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .size(thumbSize)
+                                            .background(IdlixRed, CircleShape)
+                                    )
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth()
                         )
                     }
@@ -425,7 +472,8 @@ fun MobilePlayerOverlay(
                             text = "${formatDuration(effectivePos)} / ${formatDuration(durationMs)}",
                             color = TextWhite,
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.Medium
+                            fontWeight = FontWeight.Medium,
+                            style = TextStyle(fontFeatureSettings = "tnum")
                         )
 
                         // Speed chip + Fullscreen button (bottom-right cluster)

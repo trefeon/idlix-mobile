@@ -13,6 +13,27 @@ import kotlinx.coroutines.flow.asStateFlow
 object PipController {
     var isPlaybackActive: Boolean = false
 
+    /**
+     * Set by [enterPip] when the user explicitly requests PiP (top-bar toggle).
+     * Consumed by MainActivity.onUserLeaveHint so a manual entry in flight isn't
+     * mistaken for an auto-enter; Home/recents otherwise pause instead of PiP.
+     */
+    @Volatile
+    var manualPipArmed: Boolean = false
+
+    /**
+     * Registered by the player composable while ExoPlayer is alive; unregistered
+     * on dispose. Invoked (not cleared) by [pausePlayback].
+     */
+    @Volatile
+    var onPauseRequested: (() -> Unit)? = null
+
+    /** Asks the registered player to pause; no-op when nothing is registered. */
+    fun pausePlayback() {
+        onPauseRequested?.invoke()
+    }
+
+
     private val _isInPipMode = MutableStateFlow(false)
     val isInPipMode: StateFlow<Boolean> = _isInPipMode.asStateFlow()
 
@@ -21,6 +42,9 @@ object PipController {
 
     fun setInPipMode(inPip: Boolean) {
         _isInPipMode.value = inPip
+        // Leaving PiP (restore to fullscreen) retires any manual-entry arming,
+        // so a later Home press pauses instead of skipping pause on a stale flag.
+        if (!inPip) manualPipArmed = false
     }
 
     fun setSourceRectHint(rect: Rect?) {
@@ -39,7 +63,9 @@ object PipController {
                     builder.setAutoEnterEnabled(true)
                     builder.setSeamlessResizeEnabled(true)
                 }
-                activity.enterPictureInPictureMode(builder.build())
+                val entered = activity.enterPictureInPictureMode(builder.build())
+                if (entered) manualPipArmed = true
+                entered
             } catch (e: Exception) {
                 false
             }

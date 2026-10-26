@@ -24,9 +24,19 @@ class MainActivity : ComponentActivity() {
 
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (PipController.isPlaybackActive) {
-            PipController.enterPip(this)
+        // Already floating: leave PiP playback alone.
+        if (PipController.isInPipMode.value) return
+        // Manual PiP toggle in flight: let the requested entry proceed.
+        if (PipController.manualPipArmed) {
+            PipController.manualPipArmed = false
+            return
         }
+        // Home/recents: pause instead of auto-entering PiP. Disable the API-31+
+        // auto-enter params synchronously so the framework doesn't yank the task
+        // into PiP after we pause. Resume via Continue Watching / detail Resume
+        // (position keeps saving through the existing 5s + dispose paths).
+        PipController.setAutoEnterEnabled(this, false)
+        PipController.pausePlayback()
     }
 
     override fun onPictureInPictureModeChanged(

@@ -543,6 +543,9 @@ fun MobilePlayerView(
                     }
                 }
                 exoPlayer.addListener(listener)
+                // Lets MainActivity.onUserLeaveHint pause playback on Home/recents.
+                // isPlaying/progress keep flowing through the existing listener + poller.
+                PipController.onPauseRequested = { exoPlayer.pause() }
 
                 onDispose {
                     try {
@@ -554,6 +557,7 @@ fun MobilePlayerView(
                         }
                     } catch (_: Exception) {}
                     PipController.isPlaybackActive = false
+                    PipController.onPauseRequested = null
                     activePlayer = null
                     exoPlayer.release()
                 }
