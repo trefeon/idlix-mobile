@@ -190,7 +190,7 @@ fun MobilePlayerView(
     var playbackEnded by remember { mutableStateOf(false) }
     var upNextCountdown by remember { mutableStateOf<Int?>(null) }
     var audioOptions by remember { mutableStateOf<List<AudioTrackOption>>(emptyList()) }
-    var selectedAudioLang by remember { mutableStateOf<String?>(null) }
+    var selectedAudioLang by remember { mutableStateOf(PlayerQualityPrefs.getPreferredAudioLanguage(context)) }
     var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
     var brightnessIndicator by remember { mutableStateOf<Float?>(null) }
     var volumeIndicator by remember { mutableStateOf<Float?>(null) }
@@ -375,6 +375,7 @@ fun MobilePlayerView(
                         trackSelectionParameters = trackSelectionParameters.buildUpon()
                             .setPreferredTextLanguage("id")
                             .setSelectUndeterminedTextLanguage(true)
+                            .setPreferredAudioLanguage(PlayerQualityPrefs.getPreferredAudioLanguage(context))
                             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !isSubtitleEnabled)
                             .build()
                         // Data-Saver / saved tier applies from the first segment.
@@ -447,6 +448,7 @@ fun MobilePlayerView(
             LaunchedEffect(exoPlayer) {
                 onRegisterAudioSelect { option ->
                     selectedAudioLang = option.language
+                    PlayerQualityPrefs.setPreferredAudioLanguage(context, option.language)
                     try {
                         val params = exoPlayer.trackSelectionParameters.buildUpon()
                         params.setPreferredAudioLanguage(option.language)
@@ -532,9 +534,9 @@ fun MobilePlayerView(
                 }
                 val listener = object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (playbackState == Player.STATE_ENDED) {
-                            playbackEnded = true
-                        }
+                        // Reset on seek/replay: a stale ENDED flag would keep the
+                        // up-next state machine armed after the user scrubbed back.
+                        playbackEnded = (playbackState == Player.STATE_ENDED)
                     }
                     override fun onTracksChanged(tracks: Tracks) {
                         refreshAudioOptions()

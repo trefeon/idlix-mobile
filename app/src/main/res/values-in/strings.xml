@@ -88,6 +88,7 @@
     <string name="seek_mode">MODE GESER</string>
     <string name="press_ok_to_play">Tekan OK untuk putar</string>
     <string name="jumping_to">Melompat ke %s…</string>
+    <string name="next_episode">Episode Berikutnya</string>
     <string name="play_next_episode">Putar Sekarang</string>
     <string name="next_episode_in_seconds">Putar otomatis dalam %ds</string>
     <string name="dismiss">Tutup</string>

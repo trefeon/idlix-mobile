@@ -204,10 +204,17 @@ fun LibraryScreen(
                         ) {
                             items(uiState.historyItems, key = { it.contentId }) { item ->
                                 val slug = item.slug ?: item.contentId
+                                // Detail only resolves movie/series: episodes carry the
+                                // series slug, so route them to series detail (mirrors
+                                // ContinueWatchingSection). Blank slugs can't route.
+                                val routeType = when (item.contentType) {
+                                    "episode", "tv_series" -> "series"
+                                    else -> item.contentType
+                                }
                                 ContinueWatchingCard(
                                     item = item,
                                     cardWidth = cardWidthDp,
-                                    onClick = { onNavigateToDetail(item.contentType, slug) },
+                                    onClick = { if (slug.isNotBlank()) onNavigateToDetail(routeType, slug) },
                                     onRemove = { removeHistoryWithUndo(item.contentId) },
                                     modifier = Modifier.fillMaxWidth()
                                 )

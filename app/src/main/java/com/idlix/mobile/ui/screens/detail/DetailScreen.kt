@@ -153,7 +153,7 @@ fun DetailScreen(
     val overview = uiState.movie?.overview ?: uiState.series?.overview ?: ""
     val rawVoteAverage = uiState.movie?.voteAverage ?: uiState.series?.voteAverage
     val year = (uiState.movie?.releaseDate ?: uiState.series?.firstAirDate)?.take(4) ?: ""
-    val durationText = uiState.movie?.runtime?.let { "$it min" }
+    val durationText = uiState.movie?.runtime?.let { stringResource(R.string.runtime_minutes, it) }
         ?: uiState.series?.numberOfSeasons?.let { "$it Seasons" }
         ?: ""
     val genres = (uiState.movie?.genres ?: uiState.series?.genres ?: emptyList()).map { it.name }
@@ -512,7 +512,7 @@ private fun EpisodeCardItem(
                 if (epRuntime != null && epRuntime > 0) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "$epRuntime min",
+                        text = stringResource(R.string.runtime_minutes, epRuntime),
                         color = TextSecondary,
                         fontSize = 10.sp
                     )
