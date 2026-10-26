@@ -102,7 +102,7 @@ fun MobilePlayerOverlay(
     onUserInteraction: () -> Unit,
     onToggleControls: () -> Unit,
     qualityLabel: String = "Auto",
-    onOpenQualityPicker: () -> Unit = {},
+    onOpenQualityPicker: (startAtSpeed: Boolean) -> Unit = {},
     playbackSpeed: Float = 1f,
      modifier: Modifier = Modifier
 ) {
@@ -193,7 +193,7 @@ fun MobilePlayerOverlay(
                             .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                             .clip(RoundedCornerShape(6.dp))
                             .background(Color.White.copy(alpha = 0.15f))
-                            .clickable(onClick = onOpenQualityPicker)
+                            .clickable(onClick = { onOpenQualityPicker(false) })
                             .padding(horizontal = 8.dp, vertical = 7.dp),
                         contentAlignment = Alignment.Center
                     ) {
@@ -435,29 +435,13 @@ fun MobilePlayerOverlay(
                         )
 
                         // Speed chip + Fullscreen button (bottom-right cluster).
-                        // Inline chrome also surfaces quality + CC here (under the
-                        // seekbar), mirroring the fullscreen top-bar section.
+                        // Quality lives in the top bar in both modes; CC stays
+                        // inline here in portrait and in the top bar fullscreen.
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             if (!isFullscreen) {
-                                Box(
-                                    modifier = Modifier
-                                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                                        .clip(RoundedCornerShape(6.dp))
-                                        .background(Color.White.copy(alpha = 0.15f))
-                                        .clickable(onClick = onOpenQualityPicker)
-                                        .padding(horizontal = 8.dp, vertical = 7.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Text(
-                                        text = "$qualityLabel ▾",
-                                        color = TextWhite,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
                                 IconButton(
                                     onClick = onOpenSubtitlePicker,
                                     modifier = Modifier.size(48.dp)
@@ -474,7 +458,7 @@ fun MobilePlayerOverlay(
                                     .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(Color.White.copy(alpha = 0.15f))
-                                    .clickable(onClick = onOpenQualityPicker)
+                                    .clickable(onClick = { onOpenQualityPicker(true) })
                                     .padding(horizontal = 8.dp, vertical = 7.dp),
                                 contentAlignment = Alignment.Center
                             ) {

@@ -207,6 +207,7 @@ fun MobilePlayerView(
     // Transient pinch-toggle feedback chip ("Zoom · Fill" / "Fit · Full picture").
     var zoomFeedback by remember { mutableStateOf<Boolean?>(null) }
     var showQualitySheet by remember { mutableStateOf(false) }
+    var qualitySheetStartAtSpeed by remember { mutableStateOf(false) }
     val effectiveQuality = PlayerQualityPrefs.effectiveQuality(requestedQuality, isDataSaver)
 
     // Pick up Data-Saver toggles from Settings while the player is alive.
@@ -822,7 +823,8 @@ fun MobilePlayerView(
                         context.findActivity()?.let { PipController.enterPip(it) }
                     },
                     qualityLabel = PlayerQualityPrefs.labelFor(effectiveQuality),
-                    onOpenQualityPicker = {
+                    onOpenQualityPicker = { startAtSpeed ->
+                        qualitySheetStartAtSpeed = startAtSpeed
                         showQualitySheet = true
                         userInteractionCount++
                     },
@@ -871,7 +873,11 @@ fun MobilePlayerView(
                         PlayerQualityPrefs.setVideoZoom(context, zoom)
                         userInteractionCount++
                     },
-                    onDismiss = { showQualitySheet = false }
+                    onDismiss = {
+                        showQualitySheet = false
+                        qualitySheetStartAtSpeed = false
+                    },
+                    startAtSpeed = qualitySheetStartAtSpeed
                 )
             } else {
                 // PiP mode: system owns the window; offer tap-to-restore plus a

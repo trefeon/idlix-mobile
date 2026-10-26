@@ -33,6 +33,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -79,11 +80,18 @@ fun QualityPickerBottomSheet(
     onSelectQuality: (String) -> Unit,
     onSelectSpeed: (Float) -> Unit,
     onSelectAspect: (Boolean) -> Unit = {},
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    startAtSpeed: Boolean = false
 ) {
     if (!isVisible) return
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scrollState = rememberScrollState()
+    // Speed entry point: open scrolled to the Playback-speed section.
+    // scrollTo clamps to max, so Int.MAX_VALUE lands at the bottom.
+    LaunchedEffect(startAtSpeed) {
+        if (startAtSpeed) scrollState.scrollTo(Int.MAX_VALUE)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -110,7 +118,7 @@ fun QualityPickerBottomSheet(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
                     .padding(horizontal = 20.dp)
                     .padding(bottom = bottomPad)
             ) {
