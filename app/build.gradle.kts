@@ -33,15 +33,15 @@ android {
 
     // Release signing is optional: present keystore → signed APK; absent → unsigned APK (CI default).
     // Provide via local.properties (storeFile/storePassword/keyAlias/keyPassword) or env
-    // (IDLIX_KEYSTORE_FILE/IDLIX_KEYSTORE_PASSWORD/IDLIX_KEY_ALIAS/IDLIX_KEY_PASSWORD).
+    // (RELEASE_KEYSTORE_PATH/RELEASE_KEYSTORE_PASSWORD/RELEASE_KEY_ALIAS/RELEASE_KEY_PASSWORD).
     val releaseKeystorePath = localProperties.getProperty("storeFile")
-        ?: System.getenv("IDLIX_KEYSTORE_FILE")
+        ?: System.getenv("RELEASE_KEYSTORE_PATH")
     val releaseKeystorePassword = localProperties.getProperty("storePassword")
-        ?: System.getenv("IDLIX_KEYSTORE_PASSWORD")
+        ?: System.getenv("RELEASE_KEYSTORE_PASSWORD")
     val releaseKeyAlias = localProperties.getProperty("keyAlias")
-        ?: System.getenv("IDLIX_KEY_ALIAS")
+        ?: System.getenv("RELEASE_KEY_ALIAS")
     val releaseKeyPassword = localProperties.getProperty("keyPassword")
-        ?: System.getenv("IDLIX_KEY_PASSWORD")
+        ?: System.getenv("RELEASE_KEY_PASSWORD")
     val hasReleaseKey = !releaseKeystorePath.isNullOrBlank()
         && file(releaseKeystorePath).exists()
         && !releaseKeystorePassword.isNullOrBlank()

@@ -7,6 +7,8 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.idlix.data.net.CoreHttp
 import com.idlix.data.net.IdlixDomainResolver
+import com.idlix.mobile.startup.ErrorLog
+import com.idlix.mobile.startup.StartupRepair
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -15,29 +17,61 @@ import com.idlix.mobile.update.UpdateCheckWorker
 
 class IdlixMobileApp : Application(), ImageLoaderFactory {
 
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val startupScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
-        CoreHttp.init(this, "IdlixMobile-Client/1.0 (Android)")
-        IdlixDomainResolver.init(this)
-        // Fire-and-forget: HEAD→GET the canonical entry so mirror rotations
-        // propagate. Cached-last-known stays live until the redirect answers;
-        // failure keeps the cached/fallback URL (resolver is fail-closed).
-        appScope.launch {
+        // Headless repair first: crash-handler chain, corrupt-prefs quarantine,
+        // Coil cache probe, version migrations. Never throws.
+        try {
+            StartupRepair.run(this)
+        } catch (_: Throwable) {
+        }
+        try {
+            CoreHttp.init(this, "IdlixMobile-Client/1.0 (Android)")
+        } catch (t: Throwable) {
             try {
-                IdlixDomainResolver.resolve()
-            } catch (_: Exception) {
+                ErrorLog.append(this, t, "CoreHttp.init")
+            } catch (_: Throwable) {
             }
         }
+        try {
+            IdlixDomainResolver.init(this)
+        } catch (t: Throwable) {
+            try {
+                ErrorLog.append(this, t, "IdlixDomainResolver.init")
+            } catch (_: Throwable) {
+            }
+        }
+        // Daily update check (GitHub releases). Never throws; no-ops pre-first-run.
         try {
             UpdateCheckWorker.schedule(this)
         } catch (_: Throwable) {
         }
+        // Warm the resolver off the main thread; a failed/unsurfaced resolve
+        // (still on FALLBACK_URL) schedules a WorkManager retry in 6h when the
+        // work runtime is present, silently skipped otherwise.
+        startupScope.launch {
+            try {
+                val resolved = IdlixDomainResolver.resolve()
+                if (resolved == IdlixDomainResolver.FALLBACK_URL) {
+                    StartupRepair.scheduleResolverRetry(this@IdlixMobileApp)
+                }
+            } catch (t: Throwable) {
+                try {
+                    ErrorLog.append(this@IdlixMobileApp, t, "startup-resolve")
+                } catch (_: Throwable) {
+                }
+                try {
+                    StartupRepair.scheduleResolverRetry(this@IdlixMobileApp)
+                } catch (_: Throwable) {
+                }
+            }
+        }
     }
 
     override fun newImageLoader(): ImageLoader {
-        return ImageLoader.Builder(this)
+        val builder = ImageLoader.Builder(this)
             .okHttpClient(CoreHttp.okHttpClient)
             .allowRgb565(true)
             .respectCacheHeaders(false)
@@ -49,14 +83,19 @@ class IdlixMobileApp : Application(), ImageLoaderFactory {
                     .maxSizePercent(0.25)
                     .build()
             }
-            .diskCache {
+        if (StartupRepair.isCoilCacheless()) {
+            // Cache partition unusable (probed in StartupRepair): run cacheless
+            // rather than crashing inside Coil's disk cache.
+            builder.diskCache(null)
+        } else {
+            builder.diskCache {
                 DiskCache.Builder()
                     .directory(cacheDir.resolve("image_cache"))
                     .maxSizeBytes(150L * 1024 * 1024)
                     .build()
             }
-            .crossfade(true)
-            .build()
+        }
+        return builder.crossfade(true).build()
     }
 
 }

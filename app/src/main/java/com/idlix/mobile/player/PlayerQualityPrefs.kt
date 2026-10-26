@@ -17,12 +17,19 @@ object PlayerQualityPrefs {
     private const val KEY_SPEED = "player_speed"
     private const val KEY_DATA_SAVER = "player_data_saver"
     private const val KEY_VIDEO_ZOOM = "player_video_zoom"
+    private const val KEY_AUDIO_LANGUAGE = "player_audio_language"
     const val QUALITY_AUTO = "auto"
     const val QUALITY_1080 = "1080p"
     const val QUALITY_720 = "720p"
     const val QUALITY_480 = "480p"
 
-    /** Bitrate caps per tier (bits/sec). Auto clears constraints instead. */
+    /** Bitrate caps per tier (bits/sec). Auto clears constraints instead.
+     *
+     * Caps are deliberately mobile-biased (kept, not synced with TV):
+     * metered cell links want a ceiling even at 1080p (5M), with lower
+     * tiers at 720p 2.5M / 480p 1M. TV keeps headroom for big screens on
+     * Wi-Fi (1080p uncapped / 720p 3.0M / 480p 1.2M). See TvPlaybackQuality.
+     */
     const val BITRATE_1080 = 5_000_000
     const val BITRATE_720 = 2_500_000
     const val BITRATE_480 = 1_000_000
@@ -76,6 +83,26 @@ object PlayerQualityPrefs {
 
     fun setVideoZoom(context: Context, zoom: Boolean) {
         prefs(context).edit().putBoolean(KEY_VIDEO_ZOOM, zoom).apply()
+    }
+
+    /**
+     * Preferred audio-track language (ISO-639, e.g. "id"), selected from the
+     * live Tracks audio groups. Null = no override (default track). Mirrors
+     * TV's preferred_audio_language; applied via setPreferredAudioLanguage.
+     * NOTE: player-screen wiring (persist on select, apply at init) lives
+     * with the UI owner, not here.
+     */
+    fun getPreferredAudioLanguage(context: Context): String? =
+        prefs(context).getString(KEY_AUDIO_LANGUAGE, null)
+
+    fun setPreferredAudioLanguage(context: Context, language: String?) {
+        val edit = prefs(context).edit()
+        if (language.isNullOrBlank()) {
+            edit.remove(KEY_AUDIO_LANGUAGE)
+        } else {
+            edit.putString(KEY_AUDIO_LANGUAGE, language)
+        }
+        edit.apply()
     }
 
     /**
