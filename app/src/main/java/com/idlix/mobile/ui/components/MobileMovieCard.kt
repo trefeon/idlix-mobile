@@ -33,13 +33,15 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.idlix.mobile.ui.theme.IdlixRed
 import com.idlix.mobile.ui.theme.RatingGold
-import com.idlix.mobile.ui.theme.SurfaceDark
 import com.idlix.mobile.ui.theme.SurfaceVariantDark
-import com.idlix.mobile.ui.theme.TextDim
 import com.idlix.mobile.ui.theme.TextWhite
 
+/**
+ * Netflix-style poster card: 2:3, tight 6dp radius, edge-to-edge art with a
+ * bottom scrim carrying rating + HD micro-badges. Callers pass adaptive
+ * [width] (phone 120dp → tablet 160dp / computed grid width).
+ */
 @Composable
 fun MobileMovieCard(
     title: String,
@@ -53,14 +55,14 @@ fun MobileMovieCard(
     Column(
         modifier = modifier
             .width(width)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RoundedCornerShape(6.dp))
             .clickable(onClick = onClick)
     ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(6.dp),
             colors = CardDefaults.cardColors(containerColor = SurfaceVariantDark),
             elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
         ) {
@@ -72,43 +74,43 @@ fun MobileMovieCard(
                     contentScale = ContentScale.Crop
                 )
 
-                // Top right quality badge if available
+                // Quality tag stays top-end but quieter: dark chip, red text.
                 if (!quality.isNullOrBlank()) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(4.dp)
                             .background(
-                                color = IdlixRed.copy(alpha = 0.9f),
+                                color = Color.Black.copy(alpha = 0.7f),
                                 shape = RoundedCornerShape(4.dp)
                             )
-                            .padding(horizontal = 4.dp, vertical = 2.dp)
+                            .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {
                         Text(
                             text = quality.uppercase(),
-                            color = Color.White,
+                            color = TextWhite,
                             fontSize = 8.sp,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 }
 
-                // Bottom gradient with rating
+                // Bottom scrim with rating + HD.
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomCenter)
                         .fillMaxWidth()
-                        .height(36.dp)
+                        .height(44.dp)
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.9f))
                             )
                         )
-                        .padding(horizontal = 6.dp, vertical = 4.dp),
+                        .padding(horizontal = 6.dp, vertical = 5.dp),
                     contentAlignment = Alignment.BottomStart
                 ) {
-                    if (rating != null && rating > 0.0) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (rating != null && rating > 0.0) {
                             Icon(
                                 imageVector = Icons.Filled.Star,
                                 contentDescription = null,
@@ -122,7 +124,20 @@ fun MobileMovieCard(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold
                             )
+                            Spacer(modifier = Modifier.width(6.dp))
                         }
+                        Text(
+                            text = "HD",
+                            color = Color.White.copy(alpha = 0.85f),
+                            fontSize = 8.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .background(
+                                    Color.White.copy(alpha = 0.16f),
+                                    RoundedCornerShape(3.dp)
+                                )
+                                .padding(horizontal = 4.dp, vertical = 1.dp)
+                        )
                     }
                 }
             }

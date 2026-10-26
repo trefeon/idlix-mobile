@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,48 +28,44 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.idlix.data.model.WatchHistoryItem
-import com.idlix.mobile.ui.theme.IdlixRed
 import com.idlix.mobile.ui.theme.ProgressRed
 import com.idlix.mobile.ui.theme.SurfaceVariantDark
 import com.idlix.mobile.ui.theme.TextDim
-import com.idlix.mobile.ui.theme.TextMuted
 import com.idlix.mobile.ui.theme.TextWhite
 
 @Composable
 fun ContinueWatchingSection(
     items: List<WatchHistoryItem>,
     onItemClick: (contentType: String, slug: String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    cardWidth: Dp = 180.dp
 ) {
     if (items.isEmpty()) return
 
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(
-            text = "Continue Watching",
-            color = TextWhite,
-            fontSize = 17.sp,
-            fontWeight = FontWeight.Bold,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
+        NetflixSectionHeader(title = "Continue Watching")
 
         Spacer(modifier = Modifier.height(10.dp))
 
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             items(items, key = { it.contentId }) { item ->
                 val slug = item.slug ?: item.contentId
                 ContinueWatchingCard(
                     item = item,
+                    cardWidth = cardWidth,
                     onClick = { onItemClick(item.contentType, slug) }
                 )
             }
@@ -82,19 +77,20 @@ fun ContinueWatchingSection(
 fun ContinueWatchingCard(
     item: WatchHistoryItem,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    cardWidth: Dp = 180.dp
 ) {
     Column(
         modifier = modifier
-            .width(180.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .width(cardWidth)
+            .clip(RoundedCornerShape(6.dp))
             .clickable(onClick = onClick)
     ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(6.dp),
             colors = CardDefaults.cardColors(containerColor = SurfaceVariantDark)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -106,42 +102,49 @@ fun ContinueWatchingCard(
                     contentScale = ContentScale.Crop
                 )
 
-                // Dark overlay
+                // Bottom scrim for legibility.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.35f))
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.45f)
+                                )
+                            )
+                        )
                 )
 
-                // Center play circle
+                // Netflix-style play puck: white circle, black glyph.
                 Box(
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(40.dp)
                         .align(Alignment.Center)
-                        .background(Color.Black.copy(alpha = 0.6f), CircleShape),
+                        .background(Color.White, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Filled.PlayArrow,
                         contentDescription = null,
-                        tint = Color.White,
-                        modifier = Modifier.size(22.dp)
+                        tint = Color.Black,
+                        modifier = Modifier.size(26.dp)
                     )
                 }
 
-                // Progress Bar at bottom
+                // Red progress rail, edge to edge.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(3.dp)
+                        .height(4.dp)
                         .align(Alignment.BottomCenter)
-                        .background(Color.White.copy(alpha = 0.25f))
+                        .background(Color.White.copy(alpha = 0.3f))
                 ) {
                     val progress = (item.progressPercent / 100f).coerceIn(0f, 1f)
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(fraction = progress)
-                            .height(3.dp)
+                            .height(4.dp)
                             .background(ProgressRed)
                     )
                 }

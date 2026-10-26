@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -44,6 +45,7 @@ import com.idlix.mobile.ui.components.ContinueWatchingSection
 import com.idlix.mobile.ui.components.HeroBannerPager
 import com.idlix.mobile.ui.components.MovieSwimlane
 import com.idlix.mobile.ui.components.SeriesSwimlane
+import com.idlix.mobile.ui.components.Top10Row
 import com.idlix.mobile.ui.theme.BackgroundDark
 import com.idlix.mobile.ui.theme.IdlixRed
 import com.idlix.mobile.ui.theme.SurfaceDark
@@ -101,140 +103,177 @@ fun HomeScreen(
                 }
             }
         } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-            ) {
-                // Header Bar (Logo & Settings Button)
-                Row(
+            // Single codebase adaptive: width breakpoints only, no separate layouts.
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val isExpanded = maxWidth >= 840.dp
+                val isMedium = maxWidth >= 600.dp
+                val heroHeight = when {
+                    isExpanded -> 620.dp
+                    isMedium -> 560.dp
+                    else -> 520.dp
+                }
+                val cardWidth = when {
+                    isExpanded -> 160.dp
+                    isMedium -> 140.dp
+                    else -> 120.dp
+                }
+                val continueWidth = when {
+                    isExpanded -> 260.dp
+                    isMedium -> 220.dp
+                    else -> 180.dp
+                }
+
+                Column(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .statusBarsPadding()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
                 ) {
-                    Image(
-                        painter = painterResource(id = R.drawable.idlix_logo),
-                        contentDescription = "IDLIX Logo",
-                        modifier = Modifier.height(28.dp)
-                    )
-
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(
-                            imageVector = Icons.Filled.Settings,
-                            contentDescription = "Settings",
-                            tint = TextWhite
-                        )
-                    }
-                }
-
-                // 1. Hero Carousel
-                if (uiState.bannerMovies.isNotEmpty()) {
-                    HeroBannerPager(
-                        movies = uiState.bannerMovies,
-                        onItemClick = { slug -> onNavigateToDetail("movie", slug) }
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                // 2. Continue Watching
-                if (uiState.continueWatching.isNotEmpty()) {
-                    ContinueWatchingSection(
-                        items = uiState.continueWatching,
-                        onItemClick = { contentType, slug -> onNavigateToDetail(contentType, slug) }
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-
-                // If network failed to load but continue watching exists, show inline retry card
-                if (uiState.bannerMovies.isEmpty() && uiState.popularMovies.isEmpty()) {
-                    Card(
-                        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-                        shape = RoundedCornerShape(12.dp),
+                    // Netflix top bar: brand left, settings right.
+                    Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp)
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = uiState.error ?: "Gagal memuat rekomendasi film & serial",
-                                color = TextWhite,
-                                fontSize = 13.sp,
-                                fontWeight = FontWeight.Medium
+                        Image(
+                            painter = painterResource(id = R.drawable.idlix_logo),
+                            contentDescription = "IDLIX Logo",
+                            modifier = Modifier.height(28.dp)
+                        )
+
+                        IconButton(onClick = onNavigateToSettings) {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = "Settings",
+                                tint = TextWhite
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Button(
-                                onClick = { viewModel.loadData() },
-                                colors = ButtonDefaults.buttonColors(containerColor = IdlixRed),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text("Coba Lagi", fontSize = 12.sp)
-                            }
                         }
                     }
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
 
-                // 3. Trending Now
-                if (uiState.trending.isNotEmpty()) {
-                    MovieSwimlane(
-                        title = "Trending Now",
-                        movies = uiState.trending,
-                        onMovieClick = { slug -> onNavigateToDetail("movie", slug) }
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
+                    // 1. Hero billboard
+                    if (uiState.bannerMovies.isNotEmpty()) {
+                        HeroBannerPager(
+                            movies = uiState.bannerMovies,
+                            onItemClick = { slug -> onNavigateToDetail("movie", slug) },
+                            heroHeight = heroHeight
+                        )
+                        Spacer(modifier = Modifier.height(20.dp))
+                    }
 
-                // 4. Popular TV Series
-                if (uiState.popularSeries.isNotEmpty()) {
-                    SeriesSwimlane(
-                        title = "Popular TV Series",
-                        seriesList = uiState.popularSeries,
-                        onSeriesClick = { slug -> onNavigateToDetail("series", slug) }
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
+                    // 2. Continue Watching
+                    if (uiState.continueWatching.isNotEmpty()) {
+                        ContinueWatchingSection(
+                            items = uiState.continueWatching,
+                            onItemClick = { contentType, slug -> onNavigateToDetail(contentType, slug) },
+                            cardWidth = continueWidth
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
 
-                // 5. Popular Movies
-                if (uiState.popularMovies.isNotEmpty()) {
-                    MovieSwimlane(
-                        title = "Popular Movies",
-                        movies = uiState.popularMovies,
-                        onMovieClick = { slug -> onNavigateToDetail("movie", slug) }
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
+                    // If network failed to load but continue watching exists, show inline retry card
+                    if (uiState.bannerMovies.isEmpty() && uiState.popularMovies.isEmpty()) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = uiState.error ?: "Gagal memuat rekomendasi film & serial",
+                                    color = TextWhite,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Button(
+                                    onClick = { viewModel.loadData() },
+                                    colors = ButtonDefaults.buttonColors(containerColor = IdlixRed),
+                                    shape = RoundedCornerShape(6.dp)
+                                ) {
+                                    Icon(Icons.Filled.Refresh, contentDescription = null, modifier = Modifier.size(16.dp))
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text("Coba Lagi", fontSize = 12.sp)
+                                }
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
 
-                // 6. Action Movies
-                if (uiState.actionMovies.isNotEmpty()) {
-                    MovieSwimlane(
-                        title = "Adrenaline Action & Adventure",
-                        movies = uiState.actionMovies,
-                        onMovieClick = { slug -> onNavigateToDetail("movie", slug) }
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
+                    // 3. Trending Now
+                    if (uiState.trending.isNotEmpty()) {
+                        MovieSwimlane(
+                            title = "Trending Now",
+                            movies = uiState.trending,
+                            onMovieClick = { slug -> onNavigateToDetail("movie", slug) },
+                            cardWidth = cardWidth
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
 
-                // 7. Comedy Movies
-                if (uiState.comedyMovies.isNotEmpty()) {
-                    MovieSwimlane(
-                        title = "Top Comedy Movies",
-                        movies = uiState.comedyMovies,
-                        onMovieClick = { slug -> onNavigateToDetail("movie", slug) }
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
+                    // 4. Top 10 (oversized red numerals)
+                    if (uiState.trending.isNotEmpty()) {
+                        Top10Row(
+                            movies = uiState.trending,
+                            onMovieClick = { slug -> onNavigateToDetail("movie", slug) }
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
 
-                Spacer(modifier = Modifier.height(40.dp))
+                    // 5. Popular TV Series
+                    if (uiState.popularSeries.isNotEmpty()) {
+                        SeriesSwimlane(
+                            title = "Popular TV Series",
+                            seriesList = uiState.popularSeries,
+                            onSeriesClick = { slug -> onNavigateToDetail("series", slug) },
+                            cardWidth = cardWidth
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    // 6. Popular Movies
+                    if (uiState.popularMovies.isNotEmpty()) {
+                        MovieSwimlane(
+                            title = "Popular Movies",
+                            movies = uiState.popularMovies,
+                            onMovieClick = { slug -> onNavigateToDetail("movie", slug) },
+                            cardWidth = cardWidth
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    // 7. Action Movies
+                    if (uiState.actionMovies.isNotEmpty()) {
+                        MovieSwimlane(
+                            title = "Adrenaline Action & Adventure",
+                            movies = uiState.actionMovies,
+                            onMovieClick = { slug -> onNavigateToDetail("movie", slug) },
+                            cardWidth = cardWidth
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    // 8. Comedy Movies
+                    if (uiState.comedyMovies.isNotEmpty()) {
+                        MovieSwimlane(
+                            title = "Top Comedy Movies",
+                            movies = uiState.comedyMovies,
+                            onMovieClick = { slug -> onNavigateToDetail("movie", slug) },
+                            cardWidth = cardWidth
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+
+                    Spacer(modifier = Modifier.height(40.dp))
+                }
             }
         }
     }

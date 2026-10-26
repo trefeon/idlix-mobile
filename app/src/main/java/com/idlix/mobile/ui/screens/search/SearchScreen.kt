@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -46,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.idlix.mobile.ui.components.MobileMovieCard
+import com.idlix.mobile.ui.components.netflixCardWidth
+import com.idlix.mobile.ui.components.netflixGridColumns
 import com.idlix.mobile.ui.theme.BackgroundDark
 import com.idlix.mobile.ui.theme.IdlixRed
 import com.idlix.mobile.ui.theme.SurfaceDark
@@ -177,24 +180,30 @@ fun SearchScreen(
                 )
             }
         } else {
-            // Results Grid
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(3),
-                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(uiState.results, key = { it.id }) { item ->
-                    val type = if (item.contentType.contains("series", ignoreCase = true) || item.contentType.contains("tv", ignoreCase = true)) "series" else "movie"
-                    MobileMovieCard(
-                        title = item.title,
-                        posterUrl = item.fullPosterUrl,
-                        rating = item.voteAverage?.toDoubleOrNull(),
-                        quality = item.quality,
-                        width = 110.dp,
-                        onClick = { onNavigateToDetail(type, item.slug) }
-                    )
+            // Results Grid — single codebase adaptive: 3 / 4 / 6 columns.
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val maxWidthDp = maxWidth.value.toInt()
+                val columns = netflixGridColumns(maxWidthDp)
+                val cardWidth = netflixCardWidth(maxWidthDp, columns).dp
+
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columns),
+                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(uiState.results, key = { it.id }) { item ->
+                        val type = if (item.contentType.contains("series", ignoreCase = true) || item.contentType.contains("tv", ignoreCase = true)) "series" else "movie"
+                        MobileMovieCard(
+                            title = item.title,
+                            posterUrl = item.fullPosterUrl,
+                            rating = item.voteAverage?.toDoubleOrNull(),
+                            quality = item.quality,
+                            width = cardWidth,
+                            onClick = { onNavigateToDetail(type, item.slug) }
+                        )
+                    }
                 }
             }
         }

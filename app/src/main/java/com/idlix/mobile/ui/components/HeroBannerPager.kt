@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -19,12 +18,11 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -34,7 +32,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -44,11 +44,18 @@ import com.idlix.mobile.ui.theme.IdlixRed
 import com.idlix.mobile.ui.theme.TextMuted
 import com.idlix.mobile.ui.theme.TextWhite
 
+/**
+ * Netflix-style hero billboard: edge-to-edge backdrop, bottom gradient into the
+ * near-black background, compact metadata row (year • age • HD), then
+ * Play (white) + My List (translucent dark) CTAs. [heroHeight] grows on tablet
+ * breakpoints for a wider billboard.
+ */
 @Composable
 fun HeroBannerPager(
     movies: List<MovieItem>,
     onItemClick: (slug: String) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    heroHeight: Dp = 520.dp
 ) {
     if (movies.isEmpty()) return
 
@@ -57,7 +64,7 @@ fun HeroBannerPager(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .height(340.dp)
+            .height(heroHeight)
     ) {
         HorizontalPager(
             state = pagerState,
@@ -78,19 +85,19 @@ fun HeroBannerPager(
                     contentScale = ContentScale.Crop
                 )
 
-                // Top shadow
+                // Top scrim keeps status-bar area legible.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(80.dp)
+                        .height(96.dp)
                         .background(
                             Brush.verticalGradient(
-                                colors = listOf(BackgroundDark.copy(alpha = 0.7f), Color.Transparent)
+                                colors = listOf(BackgroundDark.copy(alpha = 0.65f), Color.Transparent)
                             )
                         )
                 )
 
-                // Bottom heavy dark gradient
+                // Bottom gradient into the background.
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
@@ -98,44 +105,52 @@ fun HeroBannerPager(
                             Brush.verticalGradient(
                                 colorStops = arrayOf(
                                     0.0f to Color.Transparent,
-                                    0.5f to Color.Transparent,
-                                    0.8f to BackgroundDark.copy(alpha = 0.85f),
+                                    0.45f to Color.Transparent,
+                                    0.75f to BackgroundDark.copy(alpha = 0.85f),
                                     1.0f to BackgroundDark
                                 )
                             )
                         )
                 )
 
-                // Movie Info & Actions
+                // Billboard info + CTAs.
                 Column(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 20.dp),
+                        .padding(horizontal = 16.dp, vertical = 28.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
                         text = movie.title,
                         color = TextWhite,
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        textAlign = TextAlign.Center
                     )
 
                     val genreText = movie.genres.joinToString(" • ") { it.name }
                     if (genreText.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
+                        Spacer(modifier = Modifier.height(6.dp))
                         Text(
                             text = genreText,
                             color = TextMuted,
                             fontSize = 12.sp,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            textAlign = TextAlign.Center
                         )
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(6.dp))
+                    NetflixMetadataRow(
+                        year = movie.releaseDate?.take(4) ?: "",
+                        duration = movie.runtime?.let { "$it min" } ?: "",
+                        centered = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -143,36 +158,43 @@ fun HeroBannerPager(
                     ) {
                         Button(
                             onClick = { onItemClick(movie.slug) },
-                            colors = ButtonDefaults.buttonColors(containerColor = IdlixRed),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White,
+                                contentColor = Color.Black
+                            ),
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.PlayArrow,
                                 contentDescription = null,
-                                tint = Color.White
+                                tint = Color.Black
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "Play", color = Color.White, fontWeight = FontWeight.Bold)
+                            Text(text = "Play", color = Color.Black, fontWeight = FontWeight.Bold)
                         }
 
-                        OutlinedButton(
+                        Button(
                             onClick = { onItemClick(movie.slug) },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = Color.White.copy(alpha = 0.18f),
+                                contentColor = TextWhite
+                            ),
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Info,
+                                imageVector = Icons.Filled.Add,
                                 contentDescription = null,
                                 tint = TextWhite
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "Info", color = TextWhite)
+                            Text(text = "My List", color = TextWhite, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
             }
         }
 
-        // Pager Indicators
+        // Pager indicators: white active pill, red reserved for brand accents elsewhere.
         if (pagerState.pageCount > 1) {
             Row(
                 modifier = Modifier
@@ -181,8 +203,9 @@ fun HeroBannerPager(
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 repeat(pagerState.pageCount) { iteration ->
-                    val color = if (pagerState.currentPage == iteration) IdlixRed else Color.White.copy(alpha = 0.35f)
-                    val width = if (pagerState.currentPage == iteration) 16.dp else 6.dp
+                    val active = pagerState.currentPage == iteration
+                    val color = if (active) Color.White else Color.White.copy(alpha = 0.35f)
+                    val width = if (active) 16.dp else 6.dp
                     Box(
                         modifier = Modifier
                             .height(6.dp)
@@ -193,5 +216,14 @@ fun HeroBannerPager(
                 }
             }
         }
+
+        // Red brand tick at the top edge of the billboard.
+        Box(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .height(2.dp)
+                .background(IdlixRed.copy(alpha = 0.9f))
+        )
     }
 }

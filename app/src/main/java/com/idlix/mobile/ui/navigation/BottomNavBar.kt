@@ -1,6 +1,10 @@
 package com.idlix.mobile.ui.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -15,10 +19,16 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.compose.currentBackStackEntryAsState
+import com.idlix.mobile.ui.theme.BackgroundDark
+import com.idlix.mobile.ui.theme.BorderDark
 import com.idlix.mobile.ui.theme.IdlixRed
-import com.idlix.mobile.ui.theme.SurfaceDark
 import com.idlix.mobile.ui.theme.TextDim
 
+/**
+ * Netflix bottom nav: near-black bar with a hairline top border, red selected
+ * state, no pill indicator. Only wires destinations that exist
+ * (home/movies/series/search/library); Settings lives behind top-bar gears.
+ */
 @Composable
 fun MobileBottomNavBar(
     navController: NavController,
@@ -27,47 +37,55 @@ fun MobileBottomNavBar(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = navBackStackEntry?.destination?.route
 
-    NavigationBar(
-        modifier = modifier.fillMaxWidth(),
-        containerColor = SurfaceDark,
-        tonalElevation = 8.dp
-    ) {
-        BottomNavItem.items.forEach { item ->
-            val isSelected = currentRoute == item.route
-            NavigationBarItem(
-                selected = isSelected,
-                onClick = {
-                    if (currentRoute != item.route) {
-                        navController.navigate(item.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+    Column(modifier = modifier.fillMaxWidth()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(1.dp)
+                .background(BorderDark)
+        )
+        NavigationBar(
+            modifier = Modifier.fillMaxWidth(),
+            containerColor = BackgroundDark,
+            tonalElevation = 0.dp
+        ) {
+            BottomNavItem.items.forEach { item ->
+                val isSelected = currentRoute == item.route
+                NavigationBarItem(
+                    selected = isSelected,
+                    onClick = {
+                        if (currentRoute != item.route) {
+                            navController.navigate(item.route) {
+                                popUpTo(navController.graph.findStartDestination().id) {
+                                    saveState = true
+                                }
+                                launchSingleTop = true
+                                restoreState = true
                             }
-                            launchSingleTop = true
-                            restoreState = true
                         }
-                    }
-                },
-                icon = {
-                    Icon(
-                        imageVector = item.icon,
-                        contentDescription = item.label
+                    },
+                    icon = {
+                        Icon(
+                            imageVector = item.icon,
+                            contentDescription = item.label
+                        )
+                    },
+                    label = {
+                        Text(
+                            text = item.label,
+                            fontSize = 11.sp
+                        )
+                    },
+                    alwaysShowLabel = true,
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = IdlixRed,
+                        selectedTextColor = IdlixRed,
+                        unselectedIconColor = TextDim,
+                        unselectedTextColor = TextDim,
+                        indicatorColor = Color.Transparent
                     )
-                },
-                label = {
-                    Text(
-                        text = item.label,
-                        fontSize = 11.sp
-                    )
-                },
-                alwaysShowLabel = true,
-                colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = IdlixRed,
-                    selectedTextColor = IdlixRed,
-                    unselectedIconColor = TextDim,
-                    unselectedTextColor = TextDim,
-                    indicatorColor = IdlixRed.copy(alpha = 0.15f)
                 )
-            )
+            }
         }
     }
 }

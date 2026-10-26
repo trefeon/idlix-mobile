@@ -3,6 +3,7 @@ package com.idlix.mobile.ui.screens.library
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.idlix.mobile.ui.components.ContinueWatchingCard
+import com.idlix.mobile.ui.components.netflixGridColumns
 import com.idlix.mobile.ui.theme.BackgroundDark
 import com.idlix.mobile.ui.theme.IdlixRed
 import com.idlix.mobile.ui.theme.SurfaceDark
@@ -116,20 +118,29 @@ fun LibraryScreen(
                 }
             }
         } else {
-            LazyVerticalGrid(
-                columns = GridCells.Fixed(2),
-                contentPadding = PaddingValues(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(uiState.historyItems, key = { it.contentId }) { item ->
-                    val slug = item.slug ?: item.contentId
-                    ContinueWatchingCard(
-                        item = item,
-                        onClick = { onNavigateToDetail(item.contentType, slug) },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+            // 16:9 history cards — single codebase adaptive: 2 / 3 / 4 columns.
+            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                val columns = netflixGridColumns(maxWidth.value.toInt(), wideCards = true)
+                val spacing = 12
+                val cardWidthDp = ((maxWidth.value.toInt() - 32 - spacing * (columns - 1)) / columns)
+                    .coerceAtLeast(140).dp
+
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(columns),
+                    contentPadding = PaddingValues(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(uiState.historyItems, key = { it.contentId }) { item ->
+                        val slug = item.slug ?: item.contentId
+                        ContinueWatchingCard(
+                            item = item,
+                            cardWidth = cardWidthDp,
+                            onClick = { onNavigateToDetail(item.contentType, slug) },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
             }
         }
@@ -139,7 +150,7 @@ fun LibraryScreen(
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
             title = { Text("Clear Watch History") },
-            text = { Text("Are you sure you want to remove all items from your watch history?") },
+            text = { Text("Are you sure you want to remove all your watch history?") },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearAll()

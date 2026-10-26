@@ -10,11 +10,13 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -29,12 +31,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.BookmarkBorder
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -44,6 +46,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -73,12 +76,13 @@ import com.idlix.data.model.CastMember
 import com.idlix.data.model.EpisodeItem
 import com.idlix.data.net.IdlixDomainResolver
 import com.idlix.mobile.R
+import com.idlix.mobile.ui.components.NetflixMetadataRow
+import com.idlix.mobile.ui.components.matchPercentForVote
 import com.idlix.mobile.ui.screens.detail.components.MobilePlayerView
 import com.idlix.mobile.ui.screens.detail.components.SubtitleModalBottomSheet
 import com.idlix.mobile.ui.screens.detail.components.findActivity
 import com.idlix.mobile.ui.theme.BackgroundDark
 import com.idlix.mobile.ui.theme.BackgroundElevated
-import com.idlix.mobile.ui.theme.GoldStar
 import com.idlix.mobile.ui.theme.IdlixRed
 import com.idlix.mobile.ui.theme.TextMuted
 import com.idlix.mobile.ui.theme.TextSecondary
@@ -140,7 +144,6 @@ fun DetailScreen(
     val title = uiState.movie?.title ?: uiState.series?.title ?: ""
     val overview = uiState.movie?.overview ?: uiState.series?.overview ?: ""
     val rawVoteAverage = uiState.movie?.voteAverage ?: uiState.series?.voteAverage
-    val rating = rawVoteAverage?.toDoubleOrNull()?.let { String.format("%.1f", it) } ?: "N/A"
     val year = (uiState.movie?.releaseDate ?: uiState.series?.firstAirDate)?.take(4) ?: ""
     val durationText = uiState.movie?.runtime?.let { "$it min" }
         ?: uiState.series?.numberOfSeasons?.let { "$it Seasons" }
@@ -249,347 +252,112 @@ fun DetailScreen(
                         )
                     }
                 } else {
-                    // Scrollable Media Metadata, Episodes, and Cast
-                    LazyColumn(
+                    // Master-detail on Expanded (>=840dp): info master left,
+                    // episodes/cast detail right. Compact keeps the one-column rail.
+                    val playButtonText = if (uiState.isStreamLoading) {
+                        stringResource(R.string.connecting_to_media)
+                    } else if (uiState.series != null) {
+                        val playingEp = uiState.playingEpisode
+                        val selectedEp = uiState.selectedEpisode ?: uiState.episodes.firstOrNull()
+                        if (uiState.resolvedStream != null && playingEp != null) {
+                            "Sedang Diputar: S${uiState.playingSeasonNumber ?: (uiState.selectedSeason?.seasonNumber ?: 1)}E${playingEp.episodeNumber}"
+                        } else if (selectedEp != null) {
+                            "Putar S${uiState.selectedSeason?.seasonNumber ?: 1}E${selectedEp.episodeNumber}: ${selectedEp.name}"
+                        } else {
+                            stringResource(R.string.play_now)
+                        }
+                    } else {
+                        if (uiState.resolvedStream != null) {
+                            "Sedang Diputar"
+                        } else {
+                            stringResource(R.string.play_now)
+                        }
+                    }
+                    val onShareClick = {
+                        val sendIntent = Intent().apply {
+                            action = Intent.ACTION_SEND
+                            putExtra(Intent.EXTRA_TEXT, "Watch $title on IDLIX: ${IdlixDomainResolver.currentBaseUrl().trimEnd('/')}/$contentType/$slug")
+                            type = "text/plain"
+                        }
+                        context.startActivity(Intent.createChooser(sendIntent, "Share"))
+                    }
+                    BoxWithConstraints(
                         modifier = Modifier
                             .fillMaxWidth()
                             .weight(1f)
-                            .navigationBarsPadding(),
-                        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+                            .navigationBarsPadding()
                     ) {
-                        // Title
-                        item {
-                            Text(
-                                text = title,
-                                color = TextWhite,
-                                fontSize = 20.sp,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Spacer(modifier = Modifier.height(8.dp))
-                        }
-
-                        // Badges Row (Year, Rating, Duration, Quality)
-                        item {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                if (year.isNotBlank()) {
-                                    Text(text = year, color = TextMuted, fontSize = 13.sp)
-                                }
-
-                                if (rating != "N/A") {
-                                    Surface(
-                                        color = GoldStar.copy(alpha = 0.15f),
-                                        shape = RoundedCornerShape(4.dp)
-                                    ) {
-                                        Row(
-                                            verticalAlignment = Alignment.CenterVertically,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Star,
-                                                contentDescription = null,
-                                                tint = GoldStar,
-                                                modifier = Modifier.size(12.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(3.dp))
-                                            Text(
-                                                text = rating,
-                                                color = GoldStar,
-                                                fontSize = 12.sp,
-                                                fontWeight = FontWeight.Bold
-                                            )
-                                        }
-                                    }
-                                }
-
-                                if (durationText.isNotBlank()) {
-                                    Text(text = durationText, color = TextMuted, fontSize = 13.sp)
-                                }
-
-                                Surface(
-                                    color = Color.White.copy(alpha = 0.12f),
-                                    shape = RoundedCornerShape(4.dp)
-                                ) {
-                                    Text(
-                                        text = "HD",
-                                        color = TextWhite,
-                                        fontSize = 10.sp,
-                                        fontWeight = FontWeight.Bold,
-                                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(14.dp))
-                        }
-
-                        // Primary Play / Watch Now CTA Button
-                        item {
-                            Button(
-                                onClick = { viewModel.playCurrentMedia() },
-                                colors = ButtonDefaults.buttonColors(containerColor = IdlixRed),
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(24.dp)
-                                )
-                                Spacer(modifier = Modifier.width(8.dp))
-                                val buttonText = if (uiState.isStreamLoading) {
-                                    stringResource(R.string.connecting_to_media)
-                                } else if (uiState.series != null) {
-                                    val playingEp = uiState.playingEpisode
-                                    val selectedEp = uiState.selectedEpisode ?: uiState.episodes.firstOrNull()
-                                    if (uiState.resolvedStream != null && playingEp != null) {
-                                        "Sedang Diputar: S${uiState.playingSeasonNumber ?: (uiState.selectedSeason?.seasonNumber ?: 1)}E${playingEp.episodeNumber}"
-                                    } else if (selectedEp != null) {
-                                        "Putar S${uiState.selectedSeason?.seasonNumber ?: 1}E${selectedEp.episodeNumber}: ${selectedEp.name}"
-                                    } else {
-                                        stringResource(R.string.play_now)
-                                    }
-                                } else {
-                                    if (uiState.resolvedStream != null) {
-                                        "Sedang Diputar"
-                                    } else {
-                                        stringResource(R.string.play_now)
-                                    }
-                                }
-                                Text(
-                                    text = buttonText,
-                                    color = Color.White,
-                                    fontSize = 14.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            Spacer(modifier = Modifier.height(14.dp))
-                        }
-
-                        // Actions Row (Watchlist, Share)
-                        item {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Surface(
-                                    color = Color.White.copy(alpha = 0.08f),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable { isBookmarked = !isBookmarked }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(vertical = 10.dp),
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                                            contentDescription = null,
-                                            tint = if (isBookmarked) IdlixRed else Color.White,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = if (isBookmarked) "Di Daftar Saya" else stringResource(R.string.my_list),
-                                            color = TextWhite,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                }
-
-                                Surface(
-                                    color = Color.White.copy(alpha = 0.08f),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .clip(RoundedCornerShape(8.dp))
-                                        .clickable {
-                                            val sendIntent = Intent().apply {
-                                                action = Intent.ACTION_SEND
-                                                putExtra(Intent.EXTRA_TEXT, "Watch $title on IDLIX: ${IdlixDomainResolver.currentBaseUrl().trimEnd('/')}/$contentType/$slug")
-                                                type = "text/plain"
-                                            }
-                                            context.startActivity(Intent.createChooser(sendIntent, "Share"))
-                                        }
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(vertical = 10.dp),
-                                        horizontalArrangement = Arrangement.Center,
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Share,
-                                            contentDescription = null,
-                                            tint = Color.White,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = "Bagikan",
-                                            color = TextWhite,
-                                            fontSize = 13.sp,
-                                            fontWeight = FontWeight.Medium
-                                        )
-                                    }
-                                }
-                            }
-                            Spacer(modifier = Modifier.height(14.dp))
-                        }
-
-                        // Genres Chips
-                        if (genres.isNotEmpty()) {
-                            item {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .horizontalScroll(rememberScrollState()),
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    genres.forEach { genre ->
-                                        Surface(
-                                            color = Color.White.copy(alpha = 0.06f),
-                                            shape = RoundedCornerShape(12.dp)
-                                        ) {
-                                            Text(
-                                                text = genre,
-                                                color = TextSecondary,
-                                                fontSize = 11.sp,
-                                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(12.dp))
-                            }
-                        }
-
-                        // Overview (Expandable)
-                        if (overview.isNotBlank()) {
-                            item {
+                        val isExpandedPane = maxWidth >= 840.dp
+                        if (isExpandedPane) {
+                            Row(modifier = Modifier.fillMaxSize()) {
                                 Column(
                                     modifier = Modifier
-                                        .fillMaxWidth()
-                                        .animateContentSize()
-                                        .clickable { isOverviewExpanded = !isOverviewExpanded }
+                                        .weight(1.05f)
+                                        .fillMaxHeight()
+                                        .verticalScroll(rememberScrollState())
+                                        .padding(horizontal = 16.dp, vertical = 14.dp)
                                 ) {
-                                    Text(
-                                        text = overview,
-                                        color = TextSecondary,
-                                        fontSize = 13.sp,
-                                        lineHeight = 19.sp,
-                                        maxLines = if (isOverviewExpanded) Int.MAX_VALUE else 3,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    Text(
-                                        text = if (isOverviewExpanded) "Tutup" else "Selengkapnya",
-                                        color = IdlixRed,
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.SemiBold
+                                    DetailInfoColumn(
+                                        title = title,
+                                        matchPercent = matchPercentForVote(rawVoteAverage?.toDoubleOrNull()),
+                                        year = year,
+                                        durationText = durationText,
+                                        playButtonText = playButtonText,
+                                        onPlayClick = { viewModel.playCurrentMedia() },
+                                        isBookmarked = isBookmarked,
+                                        onBookmarkToggle = { isBookmarked = !isBookmarked },
+                                        onShareClick = onShareClick,
+                                        genres = genres,
+                                        overview = overview,
+                                        isOverviewExpanded = isOverviewExpanded,
+                                        onToggleOverview = { isOverviewExpanded = !isOverviewExpanded }
                                     )
                                 }
-                                Spacer(modifier = Modifier.height(16.dp))
+                                VerticalDivider(color = Color.White.copy(alpha = 0.1f))
+                                LazyColumn(
+                                    modifier = Modifier
+                                        .weight(0.95f)
+                                        .fillMaxHeight(),
+                                    contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+                                ) {
+                                    item {
+                                        DetailEpisodesCastColumn(
+                                            uiState = uiState,
+                                            viewModel = viewModel,
+                                            castList = castList
+                                        )
+                                    }
+                                }
                             }
-                        }
-
-                        // TV Series: Season Selector & Episodes List
-                        if (uiState.series != null) {
-                            val seasons = uiState.series!!.seasons
-                            if (seasons.isNotEmpty()) {
+                        } else {
+                            LazyColumn(
+                                modifier = Modifier.fillMaxSize(),
+                                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 14.dp)
+                            ) {
                                 item {
-                                    HorizontalDivider(
-                                        modifier = Modifier.padding(vertical = 8.dp),
-                                        color = Color.White.copy(alpha = 0.1f)
+                                    DetailInfoColumn(
+                                        title = title,
+                                        matchPercent = matchPercentForVote(rawVoteAverage?.toDoubleOrNull()),
+                                        year = year,
+                                        durationText = durationText,
+                                        playButtonText = playButtonText,
+                                        onPlayClick = { viewModel.playCurrentMedia() },
+                                        isBookmarked = isBookmarked,
+                                        onBookmarkToggle = { isBookmarked = !isBookmarked },
+                                        onShareClick = onShareClick,
+                                        genres = genres,
+                                        overview = overview,
+                                        isOverviewExpanded = isOverviewExpanded,
+                                        onToggleOverview = { isOverviewExpanded = !isOverviewExpanded }
                                     )
-
-                                    Text(
-                                        text = stringResource(R.string.episodes),
-                                        color = TextWhite,
-                                        fontSize = 16.sp,
-                                        fontWeight = FontWeight.Bold
+                                }
+                                item {
+                                    DetailEpisodesCastColumn(
+                                        uiState = uiState,
+                                        viewModel = viewModel,
+                                        castList = castList
                                     )
-                                    Spacer(modifier = Modifier.height(8.dp))
-
-                                    // Season Chips Row
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .horizontalScroll(rememberScrollState()),
-                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        seasons.forEach { season ->
-                                            val isSelected = uiState.selectedSeason?.seasonNumber == season.seasonNumber
-                                            FilterChip(
-                                                selected = isSelected,
-                                                onClick = { viewModel.selectSeason(season) },
-                                                label = {
-                                                    Text(
-                                                        text = season.name.ifBlank { "Season ${season.seasonNumber}" },
-                                                        fontSize = 12.sp,
-                                                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                                                    )
-                                                },
-                                                colors = FilterChipDefaults.filterChipColors(
-                                                    selectedContainerColor = IdlixRed,
-                                                    selectedLabelColor = Color.White,
-                                                    containerColor = Color.White.copy(alpha = 0.08f),
-                                                    labelColor = TextSecondary
-                                                ),
-                                                border = null
-                                            )
-                                        }
-                                    }
-                                    Spacer(modifier = Modifier.height(12.dp))
                                 }
-                            }
-
-                            // Episode Cards
-                            items(uiState.episodes) { episode ->
-                                val isSelected = (uiState.playingEpisode?.id ?: uiState.selectedEpisode?.id) == episode.id
-                                EpisodeCardItem(
-                                    episode = episode,
-                                    isSelected = isSelected,
-                                    onClick = { viewModel.selectEpisode(episode) }
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
-                        }
-
-                        // Cast Section
-                        if (castList.isNotEmpty()) {
-                            item {
-                                HorizontalDivider(
-                                    modifier = Modifier.padding(vertical = 12.dp),
-                                    color = Color.White.copy(alpha = 0.1f)
-                                )
-
-                                Text(
-                                    text = stringResource(R.string.cast),
-                                    color = TextWhite,
-                                    fontSize = 16.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Spacer(modifier = Modifier.height(10.dp))
-
-                                LazyRow(
-                                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                                ) {
-                                    items(castList) { cast ->
-                                        CastItem(cast = cast)
-                                    }
-                                }
-                                Spacer(modifier = Modifier.height(24.dp))
                             }
                         }
                     }
@@ -735,6 +503,281 @@ private fun CastItem(cast: CastMember) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+        }
+    }
+}
+
+/**
+ * Netflix info pane shared by both detail layouts: title, match metadata, Play
+ * CTA, My-List/Share actions, genres, overview. Rendered inside a LazyColumn
+ * item on phones and inside a scrollable Column (master pane) on Expanded.
+ */
+@Composable
+private fun DetailInfoColumn(
+    title: String,
+    matchPercent: Int?,
+    year: String,
+    durationText: String,
+    playButtonText: String,
+    onPlayClick: () -> Unit,
+    isBookmarked: Boolean,
+    onBookmarkToggle: () -> Unit,
+    onShareClick: () -> Unit,
+    genres: List<String>,
+    overview: String,
+    isOverviewExpanded: Boolean,
+    onToggleOverview: () -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(
+            text = title,
+            color = TextWhite,
+            fontSize = 20.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+
+        NetflixMetadataRow(
+            matchPercent = matchPercent,
+            year = year,
+            duration = durationText
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Button(
+            onClick = onPlayClick,
+            colors = ButtonDefaults.buttonColors(containerColor = IdlixRed),
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(48.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Default.PlayArrow,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(24.dp)
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                text = playButtonText,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Surface(
+                color = Color.White.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onBookmarkToggle)
+            ) {
+                Row(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
+                        contentDescription = null,
+                        tint = if (isBookmarked) IdlixRed else Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = if (isBookmarked) "Di Daftar Saya" else stringResource(R.string.my_list),
+                        color = TextWhite,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+
+            Surface(
+                color = Color.White.copy(alpha = 0.08f),
+                shape = RoundedCornerShape(8.dp),
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(8.dp))
+                    .clickable(onClick = onShareClick)
+            ) {
+                Row(
+                    modifier = Modifier.padding(vertical = 10.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Share,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Bagikan",
+                        color = TextWhite,
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+        Spacer(modifier = Modifier.height(14.dp))
+
+        if (genres.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                genres.forEach { genre ->
+                    Surface(
+                        color = Color.White.copy(alpha = 0.06f),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text(
+                            text = genre,
+                            color = TextSecondary,
+                            fontSize = 11.sp,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        if (overview.isNotBlank()) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .animateContentSize()
+                    .clickable(onClick = onToggleOverview)
+            ) {
+                Text(
+                    text = overview,
+                    color = TextSecondary,
+                    fontSize = 13.sp,
+                    lineHeight = 19.sp,
+                    maxLines = if (isOverviewExpanded) Int.MAX_VALUE else 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = if (isOverviewExpanded) "Tutup" else "Selengkapnya",
+                    color = IdlixRed,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+}
+
+/**
+ * Episodes + cast detail content shared by both layouts. Plain Column so it
+ * renders inside the compact LazyColumn (as one item) and inside the
+ * right-hand detail pane on Expanded.
+ */
+@Composable
+private fun DetailEpisodesCastColumn(
+    uiState: DetailUiState,
+    viewModel: DetailViewModel,
+    castList: List<CastMember>
+) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        if (uiState.series != null) {
+            val seasons = uiState.series!!.seasons
+            if (seasons.isNotEmpty()) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = 8.dp),
+                    color = Color.White.copy(alpha = 0.1f)
+                )
+
+                Text(
+                    text = stringResource(R.string.episodes),
+                    color = TextWhite,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    seasons.forEach { season ->
+                        val isSelected = uiState.selectedSeason?.seasonNumber == season.seasonNumber
+                        FilterChip(
+                            selected = isSelected,
+                            onClick = { viewModel.selectSeason(season) },
+                            label = {
+                                Text(
+                                    text = season.name.ifBlank { "Season ${season.seasonNumber}" },
+                                    fontSize = 12.sp,
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                )
+                            },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = IdlixRed,
+                                selectedLabelColor = Color.White,
+                                containerColor = Color.White.copy(alpha = 0.08f),
+                                labelColor = TextSecondary
+                            ),
+                            border = null
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+
+            uiState.episodes.forEach { episode ->
+                val isSelected = (uiState.playingEpisode?.id ?: uiState.selectedEpisode?.id) == episode.id
+                EpisodeCardItem(
+                    episode = episode,
+                    isSelected = isSelected,
+                    onClick = { viewModel.selectEpisode(episode) }
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+        }
+
+        if (castList.isNotEmpty()) {
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = Color.White.copy(alpha = 0.1f)
+            )
+
+            Text(
+                text = stringResource(R.string.cast),
+                color = TextWhite,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(castList) { cast ->
+                    CastItem(cast = cast)
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 }
