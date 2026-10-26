@@ -1,5 +1,6 @@
 package com.idlix.mobile.ui.navigation
 
+import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Movie
@@ -7,6 +8,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tv
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.idlix.mobile.R
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 
@@ -20,7 +22,11 @@ sealed class MobileScreen(val route: String) {
 
     object Detail : MobileScreen("detail/{contentType}/{slug}") {
         fun createRoute(contentType: String, slug: String): String {
+            // Path-segment encoding: URLEncoder emits '+' for spaces (query
+            // semantics), but '+' is literal in a path — rewrite to %20 so
+            // slugs with spaces survive the detail route round-trip.
             val encodedSlug = URLEncoder.encode(slug, StandardCharsets.UTF_8.toString())
+                .replace("+", "%20")
             return "detail/$contentType/$encodedSlug"
         }
     }
@@ -28,14 +34,14 @@ sealed class MobileScreen(val route: String) {
 
 sealed class BottomNavItem(
     val route: String,
-    val label: String,
+    @StringRes val labelRes: Int,
     val icon: ImageVector
 ) {
-    object Home : BottomNavItem(MobileScreen.Home.route, "Home", Icons.Filled.Home)
-    object Movies : BottomNavItem(MobileScreen.Movies.route, "Movies", Icons.Filled.Movie)
-    object Series : BottomNavItem(MobileScreen.Series.route, "Series", Icons.Filled.Tv)
-    object Search : BottomNavItem(MobileScreen.Search.route, "Search", Icons.Filled.Search)
-    object Library : BottomNavItem(MobileScreen.Library.route, "Library", Icons.Filled.VideoLibrary)
+    object Home : BottomNavItem(MobileScreen.Home.route, R.string.home, Icons.Filled.Home)
+    object Movies : BottomNavItem(MobileScreen.Movies.route, R.string.movies, Icons.Filled.Movie)
+    object Series : BottomNavItem(MobileScreen.Series.route, R.string.series, Icons.Filled.Tv)
+    object Search : BottomNavItem(MobileScreen.Search.route, R.string.search, Icons.Filled.Search)
+    object Library : BottomNavItem(MobileScreen.Library.route, R.string.library, Icons.Filled.VideoLibrary)
 
     companion object {
         val items = listOf(Home, Movies, Series, Search, Library)

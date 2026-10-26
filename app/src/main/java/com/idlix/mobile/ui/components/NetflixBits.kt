@@ -29,6 +29,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.idlix.data.model.MovieItem
+import com.idlix.mobile.R
 import com.idlix.mobile.ui.theme.AgeBadgeBorder
 import com.idlix.mobile.ui.theme.IdlixRed
 import com.idlix.mobile.ui.theme.MatchGreen
@@ -118,7 +120,7 @@ fun NetflixMetadataRow(
     ) {
         if (matchPercent != null) {
             Text(
-                text = "$matchPercent% Match",
+                text = stringResource(R.string.match_percent, matchPercent),
                 color = MatchGreen,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
@@ -183,18 +185,18 @@ fun Top10Row(
     val top10 = movies.take(10)
 
     Column(modifier = modifier.fillMaxWidth()) {
-        NetflixSectionHeader(title = "Top 10 Right Now")
+        NetflixSectionHeader(title = stringResource(R.string.top_10_movies))
         Spacer(modifier = Modifier.height(10.dp))
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            itemsIndexed(top10, key = { _, movie -> movie.id }) { index, movie ->
+            itemsIndexed(top10, key = { _, movie -> movie.id.ifBlank { movie.slug }.ifBlank { movie.title } }) { index, movie ->
                 Top10Card(
                     rank = index + 1,
                     title = movie.title,
                     posterUrl = movie.fullPosterUrl,
-                    onClick = { onMovieClick(movie.slug) }
+                    onClick = { if (movie.slug.isNotBlank()) onMovieClick(movie.slug) }
                 )
             }
         }

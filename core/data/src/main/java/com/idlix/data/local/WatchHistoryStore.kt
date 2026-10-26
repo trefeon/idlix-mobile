@@ -169,6 +169,7 @@ class WatchHistoryStore private constructor(context: Context) {
     }
 
     fun clearAll() {
+        memoryHistory = mutableListOf()
         prefs.edit().clear().apply()
         _historyFlow.value = emptyList()
     }

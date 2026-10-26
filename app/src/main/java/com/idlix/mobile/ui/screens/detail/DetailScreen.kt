@@ -258,11 +258,20 @@ fun DetailScreen(
                             .padding(24.dp),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text(
-                            text = uiState.detailError ?: stringResource(R.string.loading_error),
-                            color = TextWhite,
-                            fontSize = 14.sp
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = uiState.detailError ?: stringResource(R.string.loading_error),
+                                color = TextWhite,
+                                fontSize = 14.sp
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Button(
+                                onClick = { viewModel.loadDetail(contentType, slug) },
+                                colors = ButtonDefaults.buttonColors(containerColor = IdlixRed)
+                            ) {
+                                Text(text = stringResource(R.string.try_again))
+                            }
+                        }
                     }
                 } else {
                     // Master-detail on Expanded (>=840dp): info master left,
@@ -778,7 +787,9 @@ private fun DetailEpisodesCastColumn(
                             onClick = { viewModel.selectSeason(season) },
                             label = {
                                 Text(
-                                    text = season.name.ifBlank { "Season ${season.seasonNumber}" },
+                                    text = season.name.ifBlank {
+                                        stringResource(R.string.season, season.seasonNumber)
+                                    },
                                     fontSize = 12.sp,
                                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                                 )

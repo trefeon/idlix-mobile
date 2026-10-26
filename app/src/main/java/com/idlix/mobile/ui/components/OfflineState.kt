@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
@@ -65,6 +66,7 @@ fun OfflineState(
         Spacer(modifier = Modifier.height(16.dp))
         Button(
             onClick = onRetry,
+            modifier = Modifier.heightIn(min = 48.dp),
             colors = ButtonDefaults.buttonColors(containerColor = IdlixRed)
         ) {
             Text(text = stringResource(R.string.try_again))
@@ -110,6 +112,7 @@ fun EmptyTitlesState(
         Spacer(modifier = Modifier.height(16.dp))
         Button(
             onClick = onRetry,
+            modifier = Modifier.heightIn(min = 48.dp),
             colors = ButtonDefaults.buttonColors(containerColor = IdlixRed)
         ) {
             Text(text = stringResource(R.string.try_again))

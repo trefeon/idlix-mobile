@@ -121,7 +121,15 @@ fun AppMobileNavHost(
             }
         ) { backStackEntry ->
             val contentType = backStackEntry.arguments?.getString("contentType") ?: "movie"
-            val slug = backStackEntry.arguments?.getString("slug") ?: ""
+            val rawSlug = backStackEntry.arguments?.getString("slug") ?: ""
+            // createRoute() percent-encodes; Nav may hand back the raw
+            // encoding. Decode once (tolerantly) so slugs with spaces or
+            // reserved chars resolve instead of 404ing downstream.
+            val slug = try {
+                java.net.URLDecoder.decode(rawSlug, Charsets.UTF_8.name())
+            } catch (_: Exception) {
+                rawSlug
+            }
             DetailScreen(
                 contentType = contentType,
                 slug = slug,

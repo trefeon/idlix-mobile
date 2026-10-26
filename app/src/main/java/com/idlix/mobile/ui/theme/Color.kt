@@ -8,10 +8,11 @@ val IdlixRed = Color(0xFFE50914)
 val IdlixRedDark = Color(0xFFB20710)
 val IdlixAccentCyan = Color(0xFF00ADB5)
 
-// Netflix near-black surfaces (#141414 family)
-val BackgroundDark = Color(0xFF141414)
+// OLED true-black base with minimal-elevation gray surfaces (#121212-#1B1B1B).
+// Depth reads through hierarchy: base #000 < variant #121212 < surface #1B1B1B.
+val BackgroundDark = Color(0xFF000000)
 val SurfaceDark = Color(0xFF1B1B1B)
-val SurfaceVariantDark = Color(0xFF2F2F2F)
+val SurfaceVariantDark = Color(0xFF121212)
 val BackgroundElevated = SurfaceDark
 
 val TextWhite = Color(0xFFFFFFFF)

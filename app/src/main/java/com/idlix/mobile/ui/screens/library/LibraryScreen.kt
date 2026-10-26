@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -81,6 +82,9 @@ fun LibraryScreen(
     val myListTabLabel = stringResource(R.string.my_list)
 
     fun removeHistoryWithUndo(contentId: String) {
+        // Single-level undo: pendingUndo holds one item, so dismiss any
+        // queued snackbar first — only the latest removal stays restorable.
+        snackbarHostState.currentSnackbarData?.dismiss()
         viewModel.removeItem(contentId)
         scope.launch {
             if (snackbarHostState.showSnackbar(removedLabel, undoLabel) == SnackbarResult.ActionPerformed) {
@@ -90,6 +94,8 @@ fun LibraryScreen(
     }
 
     fun removeBookmarkWithUndo(contentId: String) {
+        // Same single-level undo contract as history: latest removal wins.
+        snackbarHostState.currentSnackbarData?.dismiss()
         viewModel.removeBookmark(contentId)
         scope.launch {
             if (snackbarHostState.showSnackbar(removedLabel, undoLabel) == SnackbarResult.ActionPerformed) {
@@ -275,15 +281,21 @@ fun LibraryScreen(
             title = { Text(stringResource(R.string.clear_history_title)) },
             text = { Text(stringResource(R.string.clear_history_message)) },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.clearAll()
-                    showClearDialog = false
-                }) {
+                TextButton(
+                    onClick = {
+                        viewModel.clearAll()
+                        showClearDialog = false
+                    },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
                     Text(stringResource(R.string.clear_all), color = IdlixRed)
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showClearDialog = false }) {
+                TextButton(
+                    onClick = { showClearDialog = false },
+                    modifier = Modifier.heightIn(min = 48.dp)
+                ) {
                     Text(stringResource(R.string.cancel), color = TextWhite)
                 }
             },

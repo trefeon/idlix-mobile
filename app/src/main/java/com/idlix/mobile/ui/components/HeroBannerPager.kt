@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -69,13 +70,16 @@ fun HeroBannerPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize()
         ) { page ->
-            val movie = movies[page]
+            // getOrNull: a refresh that shrinks the list can leave the saved
+            // pager page past the new end before the state clamps it.
+            val movie = movies.getOrNull(page) ?: return@HorizontalPager
+            val canOpen = movie.slug.isNotBlank()
             val imageUrl = movie.fullBackdropUrl.ifEmpty { movie.fullPosterUrl }
 
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clickable { onItemClick(movie.slug) }
+                    .clickable(enabled = canOpen) { onItemClick(movie.slug) }
             ) {
                 AsyncImage(
                     model = imageUrl,
@@ -146,7 +150,7 @@ fun HeroBannerPager(
                     Spacer(modifier = Modifier.height(6.dp))
                     NetflixMetadataRow(
                         year = movie.releaseDate?.take(4) ?: "",
-                        duration = movie.runtime?.let { "$it min" } ?: "",
+                        duration = movie.runtime?.let { stringResource(R.string.runtime_minutes, it) } ?: "",
                         centered = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -156,7 +160,9 @@ fun HeroBannerPager(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Button(
-                            onClick = { onItemClick(movie.slug) },
+                            onClick = { if (canOpen) onItemClick(movie.slug) },
+                            enabled = canOpen,
+                            modifier = Modifier.heightIn(min = 48.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color.White,
                                 contentColor = Color.Black
@@ -165,7 +171,7 @@ fun HeroBannerPager(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = stringResource(R.string.play),
+                                contentDescription = null,
                                 tint = Color.Black
                             )
                             Spacer(modifier = Modifier.width(6.dp))
@@ -173,11 +179,15 @@ fun HeroBannerPager(
                         }
 
                         val isBookmarked = movie.slug in bookmarkedSlugs
+                        val canBookmark = movie.id.isNotBlank() || movie.slug.isNotBlank()
                         Button(
                             onClick = {
-                                if (onToggleBookmark != null) onToggleBookmark(movie)
-                                else onItemClick(movie.slug)
+                                if (onToggleBookmark != null) {
+                                    if (canBookmark) onToggleBookmark(movie)
+                                } else if (canOpen) onItemClick(movie.slug)
                             },
+                            enabled = canBookmark || (onToggleBookmark == null && canOpen),
+                            modifier = Modifier.heightIn(min = 48.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color.White.copy(alpha = 0.18f),
                                 contentColor = TextWhite
@@ -186,9 +196,7 @@ fun HeroBannerPager(
                         ) {
                             Icon(
                                 imageVector = if (isBookmarked) Icons.Filled.Check else Icons.Filled.Add,
-                                contentDescription = stringResource(
-                                    if (isBookmarked) R.string.remove_from_list else R.string.add_to_list
-                                ),
+                                contentDescription = null,
                                 tint = TextWhite
                             )
                             Spacer(modifier = Modifier.width(6.dp))

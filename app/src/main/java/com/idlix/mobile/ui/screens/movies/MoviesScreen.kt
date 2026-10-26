@@ -17,6 +17,8 @@ import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
@@ -43,20 +45,8 @@ import com.idlix.mobile.ui.components.netflixCardWidth
 import com.idlix.mobile.ui.components.netflixGridColumns
 import com.idlix.mobile.ui.theme.BackgroundDark
 import com.idlix.mobile.ui.theme.IdlixRed
+import com.idlix.mobile.ui.theme.TextMuted
 import com.idlix.mobile.ui.theme.TextWhite
-
-private val MovieGenres = listOf(
-    FilterItem("all", "All"),
-    FilterItem("action", "Action"),
-    FilterItem("adventure", "Adventure"),
-    FilterItem("animation", "Animation"),
-    FilterItem("comedy", "Comedy"),
-    FilterItem("crime", "Crime"),
-    FilterItem("drama", "Drama"),
-    FilterItem("horror", "Horror"),
-    FilterItem("science-fiction", "Sci-Fi"),
-    FilterItem("thriller", "Thriller")
-)
 
 @Composable
 fun MoviesScreen(
@@ -65,6 +55,19 @@ fun MoviesScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val gridState = rememberLazyGridState()
+
+    val genres = listOf(
+        FilterItem("all", stringResource(R.string.genre_all)),
+        FilterItem("action", stringResource(R.string.genre_action)),
+        FilterItem("adventure", stringResource(R.string.genre_adventure)),
+        FilterItem("animation", stringResource(R.string.genre_animation)),
+        FilterItem("comedy", stringResource(R.string.genre_comedy)),
+        FilterItem("crime", stringResource(R.string.genre_crime)),
+        FilterItem("drama", stringResource(R.string.genre_drama)),
+        FilterItem("horror", stringResource(R.string.genre_horror)),
+        FilterItem("science-fiction", stringResource(R.string.genre_scifi)),
+        FilterItem("thriller", stringResource(R.string.genre_thriller))
+    )
 
     // Detect when scrolling near the end to trigger pagination
     val shouldLoadMore by remember {
@@ -79,6 +82,12 @@ fun MoviesScreen(
         if (shouldLoadMore) {
             viewModel.loadMore()
         }
+    }
+
+    // A genre switch replaces the whole list: jump back to the top so the user
+    // never sits mid-grid staring at unrelated stale scroll position.
+    LaunchedEffect(uiState.selectedGenre) {
+        gridState.scrollToItem(0)
     }
 
     PullToRefreshBox(
@@ -108,7 +117,7 @@ fun MoviesScreen(
 
                 // Filter Chips
                 FilterChipRow(
-                    items = MovieGenres,
+                    items = genres,
                     selectedId = uiState.selectedGenre,
                     onSelect = { viewModel.selectGenre(it) }
                 )
@@ -156,6 +165,32 @@ fun MoviesScreen(
                                     contentAlignment = Alignment.Center
                                 ) {
                                     CircularProgressIndicator(color = IdlixRed, modifier = Modifier.height(28.dp))
+                                }
+                            }
+                        }
+
+                        // Append-page failures previously left zero UI: the grid
+                        // just stopped growing. Surface an inline retry instead.
+                        if (!uiState.isLoadingMore && uiState.error != null) {
+                            item(span = { GridItemSpan(columns) }) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 16.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.offline_message),
+                                        color = TextMuted,
+                                        fontSize = 12.sp
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Button(
+                                        onClick = { viewModel.loadMore() },
+                                        colors = ButtonDefaults.buttonColors(containerColor = IdlixRed)
+                                    ) {
+                                        Text(text = stringResource(R.string.try_again))
+                                    }
                                 }
                             }
                         }

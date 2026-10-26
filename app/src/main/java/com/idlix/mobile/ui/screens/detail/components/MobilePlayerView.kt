@@ -196,7 +196,7 @@ fun MobilePlayerView(
     var volumeIndicator by remember { mutableStateOf<Float?>(null) }
     var doubleTapSeekFeedback by remember { mutableStateOf<Int?>(null) }
 
-    // Quality / speed / lock state (persisted in player prefs; default Auto / 1x)
+    // Quality / speed state (persisted in player prefs; default Auto / 1x)
     var requestedQuality by remember { mutableStateOf(PlayerQualityPrefs.getQuality(context)) }
     var playbackSpeed by remember { mutableStateOf(PlayerQualityPrefs.getSpeed(context)) }
     var isDataSaver by remember { mutableStateOf(PlayerQualityPrefs.isDataSaver(context)) }
@@ -206,7 +206,6 @@ fun MobilePlayerView(
     var isZoom by zoomState
     // Transient pinch-toggle feedback chip ("Zoom · Fill" / "Fit · Full picture").
     var zoomFeedback by remember { mutableStateOf<Boolean?>(null) }
-    var isLocked by remember { mutableStateOf(false) }
     var showQualitySheet by remember { mutableStateOf(false) }
     val effectiveQuality = PlayerQualityPrefs.effectiveQuality(requestedQuality, isDataSaver)
 
@@ -230,9 +229,8 @@ fun MobilePlayerView(
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
 
     // Auto-hide controls after 5 seconds of inactivity.
-    // Lock suppresses auto-hide: locked chrome is already minimal (unlock affordance only).
-    LaunchedEffect(showControls, isPlaying, userInteractionCount, isLocked) {
-        if (showControls && isPlaying && !isLocked) {
+    LaunchedEffect(showControls, isPlaying, userInteractionCount) {
+        if (showControls && isPlaying) {
             delay(5000)
             showControls = false
         }
@@ -636,10 +634,8 @@ fun MobilePlayerView(
                 },
             )
 
-            // Gesture layer + overlay. Lock hides the gesture layer entirely;
-            // the overlay renders an unlock affordance instead.
+            // Gesture layer + overlay.
             if (!isInPipMode) {
-                if (!isLocked) {
                 var dragStartX by remember { mutableFloatStateOf(0f) }
                 var hideHudJob by remember { mutableStateOf<Job?>(null) }
                 // Volume-drag quantization: accumulate travel, one step per 48px.
@@ -778,7 +774,6 @@ fun MobilePlayerView(
                             }
                         }
                 )
-                }
 
                 // Overlay Controls & HUDs
                 MobilePlayerOverlay(
@@ -819,11 +814,6 @@ fun MobilePlayerView(
                     onUserInteraction = { userInteractionCount++ },
                     onToggleControls = {
                         showControls = !showControls
-                        userInteractionCount++
-                    },
-                    isLocked = isLocked,
-                    onToggleLock = {
-                        isLocked = !isLocked
                         userInteractionCount++
                     },
                     onEnterPip = {

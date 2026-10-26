@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
@@ -174,12 +175,16 @@ private fun UpdateButton(
     if (primary) {
         Button(
             onClick = onClick,
+            modifier = Modifier.heightIn(min = 48.dp),
             colors = ButtonDefaults.buttonColors(containerColor = IdlixRed)
         ) {
             Text(text = label)
         }
     } else {
-        androidx.compose.material3.OutlinedButton(onClick = onClick) {
+        androidx.compose.material3.OutlinedButton(
+            onClick = onClick,
+            modifier = Modifier.heightIn(min = 48.dp)
+        ) {
             Text(text = label, color = TextWhite)
         }
     }

@@ -30,7 +30,12 @@ object PipController {
 
     /** Asks the registered player to pause; no-op when nothing is registered. */
     fun pausePlayback() {
-        onPauseRequested?.invoke()
+        try {
+            onPauseRequested?.invoke()
+        } catch (_: Exception) {
+            // Player may already be released on the Home-press race; pausing
+            // is best-effort and must never crash onUserLeaveHint.
+        }
     }
 
 
@@ -52,25 +57,23 @@ object PipController {
     }
 
     fun enterPip(activity: Activity, rect: Rect? = sourceRectHint): Boolean {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            return try {
-                val builder = PictureInPictureParams.Builder()
-                    .setAspectRatio(Rational(16, 9))
-                if (rect != null) {
-                    builder.setSourceRectHint(rect)
-                }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                    builder.setAutoEnterEnabled(true)
-                    builder.setSeamlessResizeEnabled(true)
-                }
-                val entered = activity.enterPictureInPictureMode(builder.build())
-                if (entered) manualPipArmed = true
-                entered
-            } catch (e: Exception) {
-                false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return false
+        try {
+            if (activity.isFinishing || activity.isDestroyed) return false
+            val builder = PictureInPictureParams.Builder()
+                .setAspectRatio(Rational(16, 9))
+            if (rect != null && !rect.isEmpty) {
+                builder.setSourceRectHint(rect)
             }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                builder.setSeamlessResizeEnabled(true)
+            }
+            val entered = activity.enterPictureInPictureMode(builder.build())
+            if (entered) manualPipArmed = true
+            return entered
+        } catch (_: Exception) {
+            return false
         }
-        return false
     }
 
     /**
@@ -80,6 +83,7 @@ object PipController {
     fun setAutoEnterEnabled(activity: Activity, enabled: Boolean) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             try {
+                if (activity.isFinishing || activity.isDestroyed) return
                 activity.setPictureInPictureParams(
                     PictureInPictureParams.Builder()
                         .setAspectRatio(Rational(16, 9))
@@ -95,6 +99,7 @@ object PipController {
     /** Brings the task to front, which exits PiP back to fullscreen playback. */
     fun restoreToFullscreen(activity: Activity) {
         try {
+            if (activity.isFinishing || activity.isDestroyed) return
             val intent = Intent(Intent.ACTION_MAIN).apply {
                 addCategory(Intent.CATEGORY_LAUNCHER)
                 setPackage(activity.packageName)

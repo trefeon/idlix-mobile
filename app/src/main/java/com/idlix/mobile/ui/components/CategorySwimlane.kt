@@ -39,14 +39,14 @@ fun MovieSwimlane(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(movies, key = { it.id }) { movie ->
+            items(movies, key = { it.id.ifBlank { it.slug }.ifBlank { it.title } }) { movie ->
                 MobileMovieCard(
                     title = movie.title,
                     posterUrl = movie.fullPosterUrl,
                     rating = movie.voteAverage?.toDoubleOrNull(),
                     quality = movie.quality,
                     width = cardWidth,
-                    onClick = { onMovieClick(movie.slug) }
+                    onClick = { if (movie.slug.isNotBlank()) onMovieClick(movie.slug) }
                 )
             }
         }
@@ -72,13 +72,13 @@ fun SeriesSwimlane(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp)
         ) {
-            items(seriesList, key = { it.id }) { series ->
+            items(seriesList, key = { it.id.ifBlank { it.slug }.ifBlank { it.title } }) { series ->
                 MobileMovieCard(
                     title = series.title,
                     posterUrl = series.fullPosterUrl,
                     rating = series.voteAverage?.toDoubleOrNull(),
                     width = cardWidth,
-                    onClick = { onSeriesClick(series.slug) }
+                    onClick = { if (series.slug.isNotBlank()) onSeriesClick(series.slug) }
                 )
             }
         }

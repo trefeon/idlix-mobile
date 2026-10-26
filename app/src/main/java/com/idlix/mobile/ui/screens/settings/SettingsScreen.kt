@@ -2,12 +2,14 @@ package com.idlix.mobile.ui.screens.settings
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -30,9 +32,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +53,7 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.idlix.mobile.BuildConfig
 import com.idlix.mobile.R
 import com.idlix.mobile.ui.screens.settings.components.UpdateSettingsRow
 import com.idlix.mobile.ui.theme.BackgroundDark
@@ -69,7 +75,17 @@ fun SettingsScreen(
     val isDataSaver by viewModel.isDataSaver.collectAsState()
     val updateState by viewModel.updateState.collectAsState()
     var isSubdlKeyVisible by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val subdlSavedMessage = stringResource(R.string.settings_subdl_saved)
 
+    LaunchedEffect(uiState.subdlSaved) {
+        if (uiState.subdlSaved) {
+            snackbarHostState.showSnackbar(subdlSavedMessage)
+            viewModel.consumeSavedMessage()
+        }
+    }
+
+    Box(modifier = Modifier.fillMaxSize()) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -92,7 +108,7 @@ fun SettingsScreen(
             }
             Spacer(modifier = Modifier.width(8.dp))
             Text(
-                text = "Settings",
+                text = stringResource(R.string.settings),
                 color = TextWhite,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold
@@ -113,14 +129,14 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "SubDL API Key (Subtitles)",
+                        text = stringResource(R.string.subdl_api_header),
                         color = TextWhite,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Third-party subtitle search fallback for Indonesian & English subtitles.",
+                        text = stringResource(R.string.subdl_api_desc),
                         color = TextMuted,
                         fontSize = 12.sp
                     )
@@ -130,14 +146,14 @@ fun SettingsScreen(
                     OutlinedTextField(
                         value = uiState.subdlKey,
                         onValueChange = { viewModel.updateSubdlKey(it) },
-                        label = { Text("API Key", color = TextDim) },
+                        label = { Text(stringResource(R.string.settings_api_key_label), color = TextDim) },
                         singleLine = true,
                         visualTransformation = if (isSubdlKeyVisible) VisualTransformation.None else PasswordVisualTransformation('*'),
                         trailingIcon = {
                             IconButton(onClick = { isSubdlKeyVisible = !isSubdlKeyVisible }) {
                                 Icon(
                                     imageVector = if (isSubdlKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                                    contentDescription = if (isSubdlKeyVisible) "Hide API Key" else "Show API Key",
+                                    contentDescription = if (isSubdlKeyVisible) stringResource(R.string.settings_hide_key) else stringResource(R.string.settings_show_key),
                                     tint = TextDim
                                 )
                             }
@@ -157,7 +173,7 @@ fun SettingsScreen(
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = uiState.subdlTestResult ?: "",
-                            color = if (uiState.subdlTestResult!!.contains("valid", ignoreCase = true)) Color(0xFF4CAF50) else IdlixRed,
+                            color = if (uiState.subdlTestSuccess == true) Color(0xFF4CAF50) else IdlixRed,
                             fontSize = 12.sp
                         )
                     }
@@ -167,20 +183,22 @@ fun SettingsScreen(
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(
                             onClick = { viewModel.testSubdl() },
-                            enabled = !uiState.isTestingSubdl
+                            enabled = !uiState.isTestingSubdl,
+                            modifier = Modifier.heightIn(min = 48.dp)
                         ) {
                             if (uiState.isTestingSubdl) {
                                 CircularProgressIndicator(modifier = Modifier.size(16.dp), color = IdlixRed)
                             } else {
-                                Text("Test Key", color = TextWhite)
+                                Text(stringResource(R.string.test_subdl_key), color = TextWhite)
                             }
                         }
 
                         Button(
                             onClick = { viewModel.saveSubdlKey() },
-                            colors = ButtonDefaults.buttonColors(containerColor = IdlixRed)
+                            colors = ButtonDefaults.buttonColors(containerColor = IdlixRed),
+                            modifier = Modifier.heightIn(min = 48.dp)
                         ) {
-                            Text("Save Key")
+                            Text(stringResource(R.string.settings_save_key))
                         }
                     }
                 }
@@ -199,22 +217,27 @@ fun SettingsScreen(
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Data Saver",
+                            text = stringResource(R.string.settings_data_saver_title),
                             color = TextWhite,
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Bold
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = "Cap streaming quality at 720p to save mobile data.",
+                            text = stringResource(R.string.settings_data_saver_desc),
                             color = TextMuted,
                             fontSize = 12.sp
                         )
                     }
-                    Switch(
-                        checked = isDataSaver,
-                        onCheckedChange = { viewModel.setDataSaver(it) }
-                    )
+                    Box(
+                        modifier = Modifier.size(48.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Switch(
+                            checked = isDataSaver,
+                            onCheckedChange = { viewModel.setDataSaver(it) }
+                        )
+                    }
                 }
             }
             // Storage & Cache
@@ -224,14 +247,14 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Storage & Cache",
+                        text = stringResource(R.string.settings_storage_title),
                         color = TextWhite,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Clear cached posters and thumbnails to free up storage.",
+                        text = stringResource(R.string.settings_storage_desc),
                         color = TextMuted,
                         fontSize = 12.sp
                     )
@@ -240,15 +263,24 @@ fun SettingsScreen(
 
                     OutlinedButton(
                         onClick = { viewModel.clearImageCache() },
-                        enabled = !uiState.cacheCleared
+                        enabled = !uiState.cacheCleared,
+                        modifier = Modifier.heightIn(min = 48.dp)
                     ) {
                         if (uiState.cacheCleared) {
                             Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.cd_done), tint = Color(0xFF4CAF50))
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text("Cache Cleared", color = Color(0xFF4CAF50))
+                            Text(stringResource(R.string.settings_cache_cleared), color = Color(0xFF4CAF50))
                         } else {
-                            Text("Clear Image Cache", color = TextWhite)
+                            Text(stringResource(R.string.settings_clear_cache), color = TextWhite)
                         }
+                    }
+                    if (uiState.cacheError) {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(R.string.settings_cache_error),
+                            color = IdlixRed,
+                            fontSize = 12.sp
+                        )
                     }
                 }
             }
@@ -274,14 +306,18 @@ fun SettingsScreen(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "About IDLIX Mobile",
+                        text = stringResource(R.string.settings_about_title),
                         color = TextWhite,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Version 1.0.0 (Multi-Module Architecture)\nBuilt with Jetpack Compose & Media3 ExoPlayer",
+                        text = stringResource(
+                            R.string.settings_about_body,
+                            BuildConfig.VERSION_NAME,
+                            BuildConfig.VERSION_CODE
+                        ),
                         color = TextMuted,
                         fontSize = 12.sp,
                         lineHeight = 18.sp
@@ -289,5 +325,11 @@ fun SettingsScreen(
                 }
             }
         }
+    }
+
+        SnackbarHost(
+            hostState = snackbarHostState,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }

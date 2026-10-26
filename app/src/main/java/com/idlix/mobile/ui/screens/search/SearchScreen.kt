@@ -1,7 +1,7 @@
 package com.idlix.mobile.ui.screens.search
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -9,20 +9,21 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
@@ -60,8 +61,6 @@ import com.idlix.mobile.ui.theme.TextDim
 import com.idlix.mobile.ui.theme.TextMuted
 import com.idlix.mobile.ui.theme.TextWhite
 
-private val PopularKeywords = listOf("Avengers", "Batman", "Spider-Man", "Anime", "Action", "Horror", "Drama", "Comedy")
-
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun SearchScreen(
@@ -70,6 +69,30 @@ fun SearchScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val focusManager = LocalFocusManager.current
+
+    val trimmedQuery = uiState.query.trim()
+    val isBlank = trimmedQuery.isEmpty()
+    val isShortQuery = trimmedQuery.length < 2
+
+    // First back press clears an active query (and keyboard); the second press
+    // leaves the tab as usual. Without this, back exits mid-search and the
+    // next visit reopens with a stale query and stale results.
+    BackHandler(enabled = !isBlank) {
+        viewModel.clearQuery()
+        focusManager.clearFocus()
+    }
+
+    // Proper-noun titles stay as-is across locales; genre words are localized.
+    val popularKeywords = listOf(
+        "Avengers",
+        "Batman",
+        "Spider-Man",
+        "Anime",
+        stringResource(R.string.genre_action),
+        stringResource(R.string.genre_horror),
+        stringResource(R.string.genre_drama),
+        stringResource(R.string.genre_comedy)
+    )
 
     Column(
         modifier = Modifier
@@ -90,7 +113,7 @@ fun SearchScreen(
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Filled.Search,
-                        contentDescription = stringResource(R.string.search),
+                        contentDescription = null,
                         tint = TextDim
                     )
                 },
@@ -107,7 +130,13 @@ fun SearchScreen(
                 },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                keyboardActions = KeyboardActions(onSearch = { focusManager.clearFocus() }),
+                keyboardActions = KeyboardActions(
+                    onSearch = {
+                        // Submit immediately instead of waiting out the debounce.
+                        viewModel.retry()
+                        focusManager.clearFocus()
+                    }
+                ),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = SurfaceDark,
                     unfocusedContainerColor = SurfaceDark,
@@ -122,97 +151,177 @@ fun SearchScreen(
             )
         }
 
-        if (uiState.isSearching) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                CircularProgressIndicator(color = IdlixRed)
-            }
-        } else if (uiState.error != null && uiState.query.isNotBlank()) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                OfflineState(onRetry = { viewModel.retry() })
-            }
-            // Popular searches suggestions
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.popular_searches),
-                    color = TextWhite,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(10.dp))
-
-                FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+        when {
+            uiState.isSearching && uiState.results.isEmpty() && uiState.error == null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(32.dp),
+                    contentAlignment = Alignment.Center
                 ) {
-                    PopularKeywords.forEach { keyword ->
-                        SuggestionChip(
-                            onClick = {
-                                viewModel.onQueryChange(keyword)
-                                focusManager.clearFocus()
-                            },
-                            label = { Text(text = keyword, color = TextWhite, fontSize = 12.sp) },
-                            colors = SuggestionChipDefaults.suggestionChipColors(
-                                containerColor = SurfaceDark
-                            ),
-                            border = SuggestionChipDefaults.suggestionChipBorder(
-                                enabled = true,
-                                borderColor = SurfaceVariantDark
+                    CircularProgressIndicator(color = IdlixRed)
+                }
+            }
+
+            uiState.error != null && !isBlank -> {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    OfflineState(onRetry = { viewModel.retry() })
+                    PopularSearches(
+                        keywords = popularKeywords,
+                        onPick = {
+                            viewModel.onQueryChange(it)
+                            focusManager.clearFocus()
+                        }
+                    )
+                }
+            }
+
+            uiState.results.isEmpty() -> {
+                when {
+                    isBlank -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.search_hint),
+                                color = TextMuted,
+                                fontSize = 14.sp
                             )
-                        )
+                            PopularSearches(
+                                keywords = popularKeywords,
+                                onPick = {
+                                    viewModel.onQueryChange(it)
+                                    focusManager.clearFocus()
+                                }
+                            )
+                        }
                     }
-                }
-            }
-        } else if (uiState.results.isEmpty()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(32.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = stringResource(R.string.no_results_for, uiState.query),
-                    color = TextMuted,
-                    fontSize = 14.sp
-                )
-            }
-        } else {
-            // Results Grid — single codebase adaptive: 3 / 4 / 6 columns.
-            BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                val maxWidthDp = maxWidth.value.toInt()
-                val columns = netflixGridColumns(maxWidthDp)
-                val cardWidth = netflixCardWidth(maxWidthDp, columns).dp
 
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(columns),
-                    contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp),
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    items(uiState.results, key = { it.id }) { item ->
-                        val type = if (item.contentType.contains("series", ignoreCase = true) || item.contentType.contains("tv", ignoreCase = true)) "series" else "movie"
-                        MobileMovieCard(
-                            title = item.title,
-                            posterUrl = item.fullPosterUrl,
-                            rating = item.voteAverage?.toDoubleOrNull(),
-                            quality = item.quality,
-                            width = cardWidth,
-                            onClick = { onNavigateToDetail(type, item.slug) }
-                        )
+                    isShortQuery -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.search_short_query),
+                                color = TextMuted,
+                                fontSize = 14.sp
+                            )
+                        }
+                    }
+
+                    else -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.no_results_for, trimmedQuery),
+                                color = TextMuted,
+                                fontSize = 14.sp
+                            )
+                        }
                     }
                 }
+            }
+
+            else -> {
+                // Results Grid — single codebase adaptive: 3 / 4 / 6 columns.
+                // Previous results stay visible while a refined query loads; a
+                // small footer spinner signals the in-flight search instead of
+                // flashing back to a full-screen loader and losing scroll.
+                BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                    val maxWidthDp = maxWidth.value.toInt()
+                    val columns = netflixGridColumns(maxWidthDp)
+                    val cardWidth = netflixCardWidth(maxWidthDp, columns).dp
+
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(columns),
+                        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 24.dp),
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        verticalArrangement = Arrangement.spacedBy(14.dp),
+                        modifier = Modifier.fillMaxSize()
+                    ) {
+                        items(uiState.results, key = { it.id }) { item ->
+                            val type = if (item.contentType.contains("series", ignoreCase = true) || item.contentType.contains("tv", ignoreCase = true)) "series" else "movie"
+                            MobileMovieCard(
+                                title = item.title,
+                                posterUrl = item.fullPosterUrl,
+                                rating = item.voteAverage?.toDoubleOrNull(),
+                                quality = item.quality,
+                                width = cardWidth,
+                                onClick = { onNavigateToDetail(type, item.slug) }
+                            )
+                        }
+
+                        if (uiState.isSearching) {
+                            item(span = { GridItemSpan(columns) }) {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 16.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    CircularProgressIndicator(color = IdlixRed, modifier = Modifier.height(28.dp))
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun PopularSearches(
+    keywords: List<String>,
+    onPick: (String) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 12.dp)
+    ) {
+        Text(
+            text = stringResource(R.string.popular_searches),
+            color = TextWhite,
+            fontSize = 15.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(10.dp))
+
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            keywords.forEach { keyword ->
+                SuggestionChip(
+                    onClick = { onPick(keyword) },
+                    label = { Text(text = keyword, color = TextWhite, fontSize = 12.sp) },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = SurfaceDark
+                    ),
+                    border = SuggestionChipDefaults.suggestionChipBorder(
+                        enabled = true,
+                        borderColor = SurfaceVariantDark
+                    )
+                )
             }
         }
     }

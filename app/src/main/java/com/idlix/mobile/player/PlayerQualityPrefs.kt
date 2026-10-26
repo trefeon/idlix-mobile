@@ -32,18 +32,30 @@ object PlayerQualityPrefs {
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    fun getQuality(context: Context): String =
-        prefs(context).getString(KEY_QUALITY, QUALITY_AUTO) ?: QUALITY_AUTO
+    private val KNOWN_QUALITIES = setOf(QUALITY_AUTO, QUALITY_1080, QUALITY_720, QUALITY_480)
 
-    fun setQuality(context: Context, quality: String) {
-        prefs(context).edit().putString(KEY_QUALITY, quality).apply()
+    fun getQuality(context: Context): String {
+        val stored = prefs(context).getString(KEY_QUALITY, QUALITY_AUTO) ?: QUALITY_AUTO
+        // Corrupt/legacy values fall back to Auto (unconstrained) instead of
+        // silently pinning a stale cap.
+        return if (stored in KNOWN_QUALITIES) stored else QUALITY_AUTO
     }
 
-    fun getSpeed(context: Context): Float =
-        prefs(context).getFloat(KEY_SPEED, 1.0f)
+    fun setQuality(context: Context, quality: String) {
+        val safe = if (quality in KNOWN_QUALITIES) quality else QUALITY_AUTO
+        prefs(context).edit().putString(KEY_QUALITY, safe).apply()
+    }
+
+    fun getSpeed(context: Context): Float {
+        val stored = prefs(context).getFloat(KEY_SPEED, 1.0f)
+        // Corrupt values (0, negative, NaN, absurd) would freeze or blast
+        // playback via setPlaybackSpeed — fall back to 1x.
+        return if (stored.isFinite() && stored in 0.25f..4.0f) stored else 1.0f
+    }
 
     fun setSpeed(context: Context, speed: Float) {
-        prefs(context).edit().putFloat(KEY_SPEED, speed).apply()
+        val safe = if (speed.isFinite() && speed in 0.25f..4.0f) speed else 1.0f
+        prefs(context).edit().putFloat(KEY_SPEED, safe).apply()
     }
 
     fun isDataSaver(context: Context): Boolean =

@@ -10,14 +10,15 @@ import com.idlix.data.model.MovieItem
 import com.idlix.data.model.SeriesItem
 import com.idlix.data.model.WatchHistoryItem
 import com.idlix.data.repository.IdlixRepository
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 data class HomeUiState(
@@ -48,29 +49,40 @@ class HomeViewModel(
         .map { list -> list.mapNotNull { it.slug }.toSet() }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
-    private var lastRemovedHistory: WatchHistoryItem? = null
+    private var loadJob: Job? = null
+
+    private val removedHistory = ArrayDeque<WatchHistoryItem>()
 
     init {
         // Collect unfinished watch history
         viewModelScope.launch {
             historyStore.historyFlow.collect { items ->
                 val unfinished = items.filter { it.isUnfinished }
-                _uiState.value = _uiState.value.copy(continueWatching = unfinished)
+                _uiState.update { it.copy(continueWatching = unfinished) }
             }
         }
         loadData()
     }
 
     fun refresh() {
+        if (_uiState.value.bannerMovies.isEmpty()) {
+            // Nothing cached: do a full load so the full-screen loader shows
+            // instead of stacking isLoading + isRefreshing at once.
+            loadData()
+            return
+        }
         _uiState.value = _uiState.value.copy(isRefreshing = true)
         loadData()
     }
 
     fun loadData() {
-        viewModelScope.launch {
-            if (_uiState.value.bannerMovies.isEmpty()) {
-                _uiState.value = _uiState.value.copy(isLoading = true, error = null)
-            }
+        if (_uiState.value.bannerMovies.isEmpty() && !_uiState.value.isRefreshing) {
+            _uiState.value = _uiState.value.copy(isLoading = true, error = null)
+        }
+        // Cancel any in-flight load so a rapid pull-refresh + retry pair can't
+        // clear isLoading/isRefreshing out from under the newer fetch.
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
             try {
                 var popular = repository.getPopularMovies()
                 var series = repository.getPopularSeries()
@@ -78,46 +90,58 @@ class HomeViewModel(
 
                 // If all returned empty, wait 1s and retry once (network socket warmup on startup)
                 if (popular.isEmpty() && trending.isEmpty() && series.isEmpty()) {
-                    kotlinx.coroutines.delay(1000)
+                    delay(1000)
                     popular = repository.getPopularMovies()
                     series = repository.getPopularSeries()
                     trending = repository.getTrendingMovies()
                 }
 
                 if (popular.isEmpty() && trending.isEmpty() && series.isEmpty()) {
-                    _uiState.value = _uiState.value.copy(
-                        isLoading = false,
-                        isRefreshing = false,
-                        error = "offline"
-                    )
+                    // Keep cached rails on a failed refresh; only surface
+                    // offline when there is nothing to show at all.
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            isRefreshing = false,
+                            error = if (hasCachedContent(it)) null else "offline"
+                        )
+                    }
                     return@launch
                 }
 
                 val action = repository.getMoviesByGenre("action")
                 val comedy = repository.getMoviesByGenre("comedy")
 
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    isRefreshing = false,
-                    bannerMovies = trending.ifEmpty { popular }.take(5),
-                    popularMovies = popular,
-                    popularSeries = series,
-                    trending = trending,
-                    actionMovies = action,
-                    comedyMovies = comedy,
-                    error = null
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        bannerMovies = trending.ifEmpty { popular }.take(5),
+                        popularMovies = popular,
+                        popularSeries = series,
+                        trending = trending,
+                        actionMovies = action,
+                        comedyMovies = comedy,
+                        error = null
+                    )
+                }
             } catch (e: Exception) {
-                _uiState.value = _uiState.value.copy(
-                    isLoading = false,
-                    isRefreshing = false,
-                    error = "offline"
-                )
+                _uiState.update {
+                    it.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        error = if (hasCachedContent(it)) null else "offline"
+                    )
+                }
             }
         }
     }
 
+    private fun hasCachedContent(state: HomeUiState): Boolean =
+        state.bannerMovies.isNotEmpty() || state.popularMovies.isNotEmpty()
+
     fun toggleBookmark(movie: MovieItem) {
+        if (movie.id.isBlank() && movie.slug.isBlank()) return
         bookmarkStore.toggleBookmark(
             BookmarkItem(
                 contentId = movie.id.ifBlank { movie.slug },
@@ -131,14 +155,17 @@ class HomeViewModel(
     }
 
     fun removeHistoryItem(item: WatchHistoryItem) {
-        lastRemovedHistory = item
+        removedHistory.removeAll { it.contentId == item.contentId }
+        removedHistory.addLast(item)
+        if (removedHistory.size > 10) removedHistory.removeFirst()
         historyStore.removeItem(item.contentId)
     }
 
-    fun restoreLastRemoved() {
-        lastRemovedHistory?.let {
-            historyStore.restoreItem(it)
-            lastRemovedHistory = null
+    fun restoreHistoryItem(item: WatchHistoryItem) {
+        // Item-scoped: each snackbar's Undo restores its own item, even when
+        // several removes queue up before any Undo is tapped.
+        if (removedHistory.remove(item)) {
+            historyStore.restoreItem(item)
         }
     }
 }

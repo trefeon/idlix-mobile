@@ -212,9 +212,9 @@ fun SubtitleModalBottomSheet(
                             val isSelected = isSubtitleEnabled && selectedSubtitle?.path == track.path
                             SubtitleOptionItem(
                                 title = track.label.ifBlank {
-                                    if (track.lang == "id") "Indonesian" else track.lang.uppercase()
+                                    if (track.lang == "id") stringResource(R.string.indonesian) else track.lang.uppercase()
                                 },
-                                subtitle = if (track.lang == "id") "Bahasa Indonesia" else track.lang,
+                                subtitle = if (track.lang == "id") stringResource(R.string.indonesian) else track.lang,
                                 isSelected = isSelected,
                                 onClick = { onSelectTrack(track) }
                             )

@@ -68,10 +68,18 @@ fun ContinueWatchingSection(
         ) {
             items(items, key = { it.contentId }) { item ->
                 val slug = item.slug ?: item.contentId
+                // Detail only resolves "movie"/"series"("tv_series"): episodes are
+                // recorded with contentType="episode" but carry the series slug,
+                // so route them to the series detail or they land on a broken
+                // movie lookup. Blank slugs can't form a detail route — drop the tap.
+                val routeType = when (item.contentType) {
+                    "episode", "tv_series" -> "series"
+                    else -> item.contentType
+                }
                 ContinueWatchingCard(
                     item = item,
                     cardWidth = cardWidth,
-                    onClick = { onItemClick(item.contentType, slug) },
+                    onClick = { if (slug.isNotBlank()) onItemClick(routeType, slug) },
                     onRemove = onRemoveItem?.let { remove -> { remove(item) } }
                 )
             }
@@ -101,7 +109,9 @@ fun ContinueWatchingCard(
             colors = CardDefaults.cardColors(containerColor = SurfaceVariantDark)
         ) {
             Box(modifier = Modifier.fillMaxSize()) {
-                val imageUrl = item.backdropUrl ?: item.posterUrl
+                // resolvedThumbnail builds the full TMDB URL; the raw stored
+                // paths are relative and won't load on their own.
+                val imageUrl = item.resolvedThumbnail.ifBlank { null }
                 AsyncImage(
                     model = imageUrl,
                     contentDescription = item.title,
@@ -190,7 +200,10 @@ fun ContinueWatchingCard(
         )
 
         val epTitle = item.episodeTitle
-        val subtitle = if (!epTitle.isNullOrBlank()) epTitle else if (item.remainingMinutes > 0) "${item.remainingMinutes} min left" else ""
+        val remainingLabel = if (item.remainingMinutes > 0) {
+            stringResource(R.string.remaining_minutes, item.remainingMinutes)
+        } else ""
+        val subtitle = if (!epTitle.isNullOrBlank()) epTitle else remainingLabel
         if (subtitle.isNotBlank()) {
             Text(
                 text = subtitle,

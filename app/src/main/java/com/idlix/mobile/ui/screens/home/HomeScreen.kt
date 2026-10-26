@@ -76,7 +76,7 @@ fun HomeScreen(
                 actionLabel = undoLabel
             )
             if (result == SnackbarResult.ActionPerformed) {
-                viewModel.restoreLastRemoved()
+                viewModel.restoreHistoryItem(item)
             }
         }
     }
@@ -175,8 +175,10 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.height(24.dp))
                     }
 
-                    // Single offline pattern when the catalog failed but history exists.
-                    if (uiState.bannerMovies.isEmpty() && uiState.popularMovies.isEmpty()) {
+                    // Single offline pattern when the catalog failed and history exists.
+                    // Gated on error so a partial success (genre rails loaded, banner
+                    // empty) doesn't flash a false "offline" banner over content.
+                    if (uiState.error != null && uiState.bannerMovies.isEmpty() && uiState.popularMovies.isEmpty()) {
                         OfflineState(
                             onRetry = { viewModel.loadData() },
                             modifier = Modifier.fillMaxWidth()
@@ -187,7 +189,7 @@ fun HomeScreen(
                     // 3. Trending Now
                     if (uiState.trending.isNotEmpty()) {
                         MovieSwimlane(
-                            title = "Trending Now",
+                            title = stringResource(R.string.trending_now),
                             movies = uiState.trending,
                             onMovieClick = { slug -> onNavigateToDetail("movie", slug) },
                             cardWidth = cardWidth
@@ -207,7 +209,7 @@ fun HomeScreen(
                     // 5. Popular TV Series
                     if (uiState.popularSeries.isNotEmpty()) {
                         SeriesSwimlane(
-                            title = "Popular TV Series",
+                            title = stringResource(R.string.popular_series),
                             seriesList = uiState.popularSeries,
                             onSeriesClick = { slug -> onNavigateToDetail("series", slug) },
                             cardWidth = cardWidth
@@ -218,7 +220,7 @@ fun HomeScreen(
                     // 6. Popular Movies
                     if (uiState.popularMovies.isNotEmpty()) {
                         MovieSwimlane(
-                            title = "Popular Movies",
+                            title = stringResource(R.string.popular_movies),
                             movies = uiState.popularMovies,
                             onMovieClick = { slug -> onNavigateToDetail("movie", slug) },
                             cardWidth = cardWidth
@@ -229,7 +231,7 @@ fun HomeScreen(
                     // 7. Action Movies
                     if (uiState.actionMovies.isNotEmpty()) {
                         MovieSwimlane(
-                            title = "Adrenaline Action & Adventure",
+                            title = stringResource(R.string.movies_action),
                             movies = uiState.actionMovies,
                             onMovieClick = { slug -> onNavigateToDetail("movie", slug) },
                             cardWidth = cardWidth
@@ -240,7 +242,7 @@ fun HomeScreen(
                     // 8. Comedy Movies
                     if (uiState.comedyMovies.isNotEmpty()) {
                         MovieSwimlane(
-                            title = "Top Comedy Movies",
+                            title = stringResource(R.string.movies_comedy),
                             movies = uiState.comedyMovies,
                             onMovieClick = { slug -> onNavigateToDetail("movie", slug) },
                             cardWidth = cardWidth

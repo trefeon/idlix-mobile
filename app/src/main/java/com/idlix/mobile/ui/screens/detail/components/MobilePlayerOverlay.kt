@@ -32,8 +32,6 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ClosedCaption
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
@@ -103,8 +101,6 @@ fun MobilePlayerOverlay(
     onEnterPip: () -> Unit = {},
     onUserInteraction: () -> Unit,
     onToggleControls: () -> Unit,
-    isLocked: Boolean = false,
-    onToggleLock: () -> Unit = {},
     qualityLabel: String = "Auto",
     onOpenQualityPicker: () -> Unit = {},
     playbackSpeed: Float = 1f,
@@ -119,34 +115,6 @@ fun MobilePlayerOverlay(
     val showNextEpisodeCard = (isNearEnd || playbackEnded) && nextEpisode != null && !isNextEpisodeDismissed
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (isLocked) {
-            // Locked chrome: unlock affordance only; tap anywhere unlocks.
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null,
-                        onClick = onToggleLock
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
-                    modifier = Modifier
-                        .clip(CircleShape)
-                        .background(Color.Black.copy(alpha = 0.7f))
-                        .padding(16.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.LockOpen,
-                        contentDescription = stringResource(R.string.unlock_controls),
-                        tint = Color.White,
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-        } else {
         // Overlay Controls (Top bar, Center controls, Bottom bar)
         AnimatedVisibility(
             visible = showControls,
@@ -259,18 +227,6 @@ fun MobilePlayerOverlay(
                         Icon(
                             imageVector = Icons.Default.PictureInPictureAlt,
                             contentDescription = stringResource(R.string.pip_enter),
-                            tint = Color.White.copy(alpha = 0.7f)
-                        )
-                    }
-
-                    // Lock mode toggle
-                    IconButton(
-                        onClick = onToggleLock,
-                        modifier = Modifier.size(48.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Lock,
-                            contentDescription = stringResource(R.string.lock_controls),
                             tint = Color.White.copy(alpha = 0.7f)
                         )
                     }
@@ -473,14 +429,46 @@ fun MobilePlayerOverlay(
                             color = TextWhite,
                             fontSize = 12.sp,
                             fontWeight = FontWeight.Medium,
-                            style = TextStyle(fontFeatureSettings = "tnum")
+                            style = TextStyle(fontFeatureSettings = "tnum"),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
 
-                        // Speed chip + Fullscreen button (bottom-right cluster)
+                        // Speed chip + Fullscreen button (bottom-right cluster).
+                        // Inline chrome also surfaces quality + CC here (under the
+                        // seekbar), mirroring the fullscreen top-bar section.
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
+                            if (!isFullscreen) {
+                                Box(
+                                    modifier = Modifier
+                                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                                        .clip(RoundedCornerShape(6.dp))
+                                        .background(Color.White.copy(alpha = 0.15f))
+                                        .clickable(onClick = onOpenQualityPicker)
+                                        .padding(horizontal = 8.dp, vertical = 7.dp),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "$qualityLabel ▾",
+                                        color = TextWhite,
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                                IconButton(
+                                    onClick = onOpenSubtitlePicker,
+                                    modifier = Modifier.size(48.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.ClosedCaption,
+                                        contentDescription = stringResource(R.string.subtitles),
+                                        tint = if (isSubtitleEnabled) IdlixRed else Color.White.copy(alpha = 0.7f)
+                                    )
+                                }
+                            }
                             Box(
                                 modifier = Modifier
                                     .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
@@ -512,7 +500,6 @@ fun MobilePlayerOverlay(
                     }
                 }
             }
-        }
         }
 
         // HUD: Brightness Indicator (Left)

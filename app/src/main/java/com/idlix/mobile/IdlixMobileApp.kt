@@ -7,15 +7,29 @@ import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.idlix.data.net.CoreHttp
 import com.idlix.data.net.IdlixDomainResolver
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import com.idlix.mobile.update.UpdateCheckWorker
 
 class IdlixMobileApp : Application(), ImageLoaderFactory {
+
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
         CoreHttp.init(this, "IdlixMobile-Client/1.0 (Android)")
         IdlixDomainResolver.init(this)
+        // Fire-and-forget: HEAD→GET the canonical entry so mirror rotations
+        // propagate. Cached-last-known stays live until the redirect answers;
+        // failure keeps the cached/fallback URL (resolver is fail-closed).
+        appScope.launch {
+            try {
+                IdlixDomainResolver.resolve()
+            } catch (_: Exception) {
+            }
+        }
         try {
             UpdateCheckWorker.schedule(this)
         } catch (_: Throwable) {

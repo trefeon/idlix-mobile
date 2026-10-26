@@ -4,6 +4,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.idlix.data.model.SeriesItem
 import com.idlix.data.repository.IdlixRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -27,51 +29,70 @@ class SeriesViewModel(
     private val _uiState = MutableStateFlow(SeriesUiState())
     val uiState: StateFlow<SeriesUiState> = _uiState.asStateFlow()
 
+    private var loadJob: Job? = null
+    private var requestSeq = 0
+
     init {
         loadSeries(reset = true)
     }
 
     fun selectGenre(genre: String) {
         if (_uiState.value.selectedGenre != genre) {
-            _uiState.value = _uiState.value.copy(selectedGenre = genre, currentPage = 1)
+            _uiState.value = _uiState.value.copy(
+                selectedGenre = genre,
+                currentPage = 1,
+                isLoading = true,
+                error = null,
+                seriesList = emptyList()
+            )
             loadSeries(reset = true)
         }
     }
 
     fun refresh() {
-        _uiState.value = _uiState.value.copy(isRefreshing = true, currentPage = 1)
+        loadJob?.cancel()
+        _uiState.value = _uiState.value.copy(isRefreshing = true, currentPage = 1, error = null)
         loadSeries(reset = true)
     }
 
     fun loadMore() {
         val state = _uiState.value
-        if (state.isLoading || state.isLoadingMore || !state.hasMorePages) return
+        if (state.isLoading || state.isRefreshing || state.isLoadingMore || !state.hasMorePages) return
         _uiState.value = state.copy(isLoadingMore = true)
         loadSeries(reset = false)
     }
 
     private fun loadSeries(reset: Boolean) {
-        viewModelScope.launch {
-            val state = _uiState.value
-            val targetPage = if (reset) 1 else state.currentPage + 1
-            val genreParam = if (state.selectedGenre == "all") null else state.selectedGenre
+        if (reset) loadJob?.cancel()
+        // Snapshot request params synchronously: a genre switch followed by a
+        // scroll-triggered loadMore must not read each other's state mid-flight.
+        val snap = _uiState.value
+        val targetPage = if (reset) 1 else snap.currentPage + 1
+        val genreParam = if (snap.selectedGenre == "all") null else snap.selectedGenre
+        val baseList = if (reset) emptyList() else snap.seriesList
+        val mySeq = ++requestSeq
 
+        loadJob = viewModelScope.launch {
             try {
                 val response = repository.getSeries(page = targetPage, genre = genreParam)
+                if (mySeq != requestSeq) return@launch
                 val newItems = response.data
-                val updatedList = if (reset) newItems else state.seriesList + newItems
-
-                _uiState.value = state.copy(
+                val updatedList = (if (reset) newItems else baseList + newItems).distinctBy { it.id }
+                val totalPages = response.pagination?.totalPages
+                _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isRefreshing = false,
                     isLoadingMore = false,
                     seriesList = updatedList,
                     currentPage = targetPage,
-                    hasMorePages = newItems.isNotEmpty() && targetPage < (response.pagination?.totalPages ?: targetPage),
+                    hasMorePages = if (totalPages != null) targetPage < totalPages else newItems.isNotEmpty(),
                     error = null
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                _uiState.value = state.copy(
+                if (mySeq != requestSeq) return@launch
+                _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isRefreshing = false,
                     isLoadingMore = false,
