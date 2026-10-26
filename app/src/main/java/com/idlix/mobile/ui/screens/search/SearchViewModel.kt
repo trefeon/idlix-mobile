@@ -53,6 +53,13 @@ class SearchViewModel(
         onQueryChange("")
     }
 
+    fun retry() {
+        val query = _uiState.value.query
+        if (query.trim().length >= 2) {
+            performSearch(query.trim())
+        }
+    }
+
     private fun performSearch(query: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(isSearching = true, error = null)

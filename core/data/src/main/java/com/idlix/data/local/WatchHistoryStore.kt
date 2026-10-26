@@ -156,6 +156,17 @@ class WatchHistoryStore private constructor(context: Context) {
         currentList.removeAll { it.contentId == contentId }
         saveHistoryToPrefs(currentList)
     }
+    fun restoreItem(item: WatchHistoryItem) {
+        prefs.edit()
+            .putLong("${item.contentId}_pos", item.positionMs)
+            .putLong("${item.contentId}_dur", item.durationMs)
+            .putLong("${item.contentId}_time", item.lastWatchedTime)
+            .apply()
+        val currentList = loadHistoryFromPrefs().toMutableList()
+        currentList.removeAll { it.contentId == item.contentId }
+        currentList.add(0, item)
+        saveHistoryToPrefs(currentList.take(60))
+    }
 
     fun clearAll() {
         prefs.edit().clear().apply()

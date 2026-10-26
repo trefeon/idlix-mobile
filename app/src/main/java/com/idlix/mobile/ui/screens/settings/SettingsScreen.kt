@@ -41,12 +41,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.idlix.mobile.R
 import com.idlix.mobile.ui.screens.settings.components.UpdateSettingsRow
 import com.idlix.mobile.ui.theme.BackgroundDark
 import com.idlix.mobile.update.UpdateState
@@ -84,7 +86,7 @@ fun SettingsScreen(
             IconButton(onClick = onBackClick) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = "Back",
+                    contentDescription = stringResource(R.string.back),
                     tint = TextWhite
                 )
             }
@@ -241,7 +243,7 @@ fun SettingsScreen(
                         enabled = !uiState.cacheCleared
                     ) {
                         if (uiState.cacheCleared) {
-                            Icon(Icons.Filled.Check, contentDescription = null, tint = Color(0xFF4CAF50))
+                            Icon(Icons.Filled.Check, contentDescription = stringResource(R.string.cd_done), tint = Color(0xFF4CAF50))
                             Spacer(modifier = Modifier.width(6.dp))
                             Text("Cache Cleared", color = Color(0xFF4CAF50))
                         } else {

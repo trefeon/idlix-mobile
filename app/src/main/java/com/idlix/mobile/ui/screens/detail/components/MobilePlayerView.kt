@@ -3,6 +3,7 @@ package com.idlix.mobile.ui.screens.detail.components
 import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
+import android.graphics.Rect
 import android.media.AudioManager
 import android.net.Uri
 import androidx.annotation.OptIn
@@ -26,6 +27,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -76,6 +78,7 @@ import com.idlix.mobile.player.MediaSourceHelper
 import com.idlix.mobile.player.PipController
 import com.idlix.mobile.player.PlayerQualityPrefs
 import com.idlix.mobile.ui.screens.detail.NextEpisodeInfo
+import androidx.media3.common.Tracks
 import com.idlix.mobile.ui.theme.BackgroundElevated
 import com.idlix.mobile.ui.theme.IdlixRed
 import com.idlix.mobile.ui.theme.TextMuted
@@ -101,11 +104,21 @@ fun letterboxBottomPadding(viewW: Float, viewH: Float, videoW: Float, videoH: Fl
 }
 
 /**
- * Applies the effective quality tier to a live player without recreating it.
- * Auto clears size constraints and lifts the bitrate cap; capped tiers pin
- * max resolution + bitrate so the adaptive track selector stays under them.
+ * Player-consumable audio rendition surfaced from the HLS master (ExoPlayer
+ * TRACK_TYPE_AUDIO groups). Wired to setPreferredAudioLanguage on select.
  */
-@OptIn(UnstableApi::class)
+data class AudioTrackOption(
+    val language: String? = null,
+    val label: String = ""
+)
+
+fun refreshPipHint(view: android.view.View) {
+    try {
+        val loc = IntArray(2)
+        view.getLocationOnScreen(loc)
+        PipController.setSourceRectHint(Rect(loc[0], loc[1], loc[0] + view.width, loc[1] + view.height))
+    } catch (_: Exception) {}
+}
 fun applyPlayerQuality(player: ExoPlayer, effective: String) {
     val current = player.trackSelectionParameters
     val updated = current.buildUpon()
@@ -161,6 +174,8 @@ fun MobilePlayerView(
     onDismissNextEpisode: () -> Unit,
     onRetryPlayback: () -> Unit,
     onSaveProgress: (currentPosMs: Long, durationMs: Long) -> Unit,
+    onAudioOptionsChanged: (List<AudioTrackOption>, String?) -> Unit = { _, _ -> },
+    onRegisterAudioSelect: (((AudioTrackOption) -> Unit) -> Unit) = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -170,9 +185,13 @@ fun MobilePlayerView(
     var showControls by remember { mutableStateOf(true) }
     var currentPosMs by remember { mutableLongStateOf(0L) }
     var durationMs by remember { mutableLongStateOf(0L) }
+    var bufferedMs by remember { mutableLongStateOf(0L) }
     var isPlaying by remember { mutableStateOf(true) }
-
-    // Gestures feedback state
+    var playbackEnded by remember { mutableStateOf(false) }
+    var upNextCountdown by remember { mutableStateOf<Int?>(null) }
+    var audioOptions by remember { mutableStateOf<List<AudioTrackOption>>(emptyList()) }
+    var selectedAudioLang by remember { mutableStateOf<String?>(null) }
+    var playerViewRef by remember { mutableStateOf<android.view.View?>(null) }
     var brightnessIndicator by remember { mutableStateOf<Float?>(null) }
     var volumeIndicator by remember { mutableStateOf<Float?>(null) }
     var doubleTapSeekFeedback by remember { mutableStateOf<Int?>(null) }
@@ -223,6 +242,14 @@ fun MobilePlayerView(
     LaunchedEffect(isPlaying, resolvedStream) {
         PipController.isPlaybackActive = (resolvedStream != null && isPlaying)
     }
+    // API-12 auto-enter: swipe-home enters PiP while actively playing.
+    LaunchedEffect(isPlaying, resolvedStream) {
+        if (resolvedStream != null) {
+            context.findActivity()?.let {
+                PipController.setAutoEnterEnabled(it, isPlaying)
+            }
+        }
+    }
 
     Box(
         modifier = modifier
@@ -235,7 +262,7 @@ fun MobilePlayerView(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(12.dp)
-                    .size(36.dp)
+                    .size(48.dp)
                     .background(Color.Black.copy(alpha = 0.5f), CircleShape)
             ) {
                 Icon(
@@ -414,6 +441,21 @@ fun MobilePlayerView(
             LaunchedEffect(exoPlayer) {
                 activePlayer = exoPlayer
             }
+            // Fan audio renditions out to the subtitle sheet (owned by DetailScreen).
+            LaunchedEffect(audioOptions, selectedAudioLang) {
+                onAudioOptionsChanged(audioOptions, selectedAudioLang)
+            }
+            // Registers the live audio switcher with DetailScreen (no rebuild).
+            LaunchedEffect(exoPlayer) {
+                onRegisterAudioSelect { option ->
+                    selectedAudioLang = option.language
+                    try {
+                        val params = exoPlayer.trackSelectionParameters.buildUpon()
+                        params.setPreferredAudioLanguage(option.language)
+                        exoPlayer.trackSelectionParameters = params.build()
+                    } catch (_: Exception) {}
+                }
+            }
 
             // Sync current position and periodically record progress
             LaunchedEffect(exoPlayer) {
@@ -421,6 +463,7 @@ fun MobilePlayerView(
                 while (true) {
                     currentPosMs = exoPlayer.currentPosition
                     durationMs = exoPlayer.duration.coerceAtLeast(0L)
+                    bufferedMs = exoPlayer.bufferedPosition.coerceAtLeast(0L)
                     isPlaying = exoPlayer.isPlaying
                     if (Math.abs(currentPosMs - lastSavedPos) >= 5000L && durationMs > 0) {
                         onSaveProgress(currentPosMs, durationMs)
@@ -430,14 +473,73 @@ fun MobilePlayerView(
                 }
             }
 
+            // Fresh stream resets the up-next state machine.
+            LaunchedEffect(resolvedStream.hlsMasterUrl) {
+                playbackEnded = false
+                upNextCountdown = null
+            }
+
+            // Netflix-style up-next: the 90s card holds until the final stretch,
+            // then runs a 10s countdown (Play Now + Dismiss) and auto-plays at 0
+            // unless dismissed. STATE_ENDED feeds the same path when reached.
+            val upNextActive = nextEpisode != null && !isNextEpisodeDismissed &&
+                (playbackEnded || (durationMs > 60_000L && (durationMs - currentPosMs) in 0L..90_000L))
+            LaunchedEffect(upNextActive, nextEpisode?.episode?.id) {
+                if (!upNextActive) {
+                    upNextCountdown = null
+                    return@LaunchedEffect
+                }
+                while (!playbackEnded && durationMs > 0L && (durationMs - currentPosMs) > 20_000L) {
+                    delay(500)
+                }
+                upNextCountdown = 10
+                while ((upNextCountdown ?: 0) > 0) {
+                    delay(1000)
+                    upNextCountdown = (upNextCountdown ?: 1) - 1
+                }
+                onPlayNextEpisode()
+            }
+
             DisposableEffect(exoPlayer) {
+                // Reads TRACK_TYPE_AUDIO groups into picker options.
+                fun refreshAudioOptions() {
+                    try {
+                        val tracks = exoPlayer.currentTracks
+                        val options = mutableListOf<AudioTrackOption>()
+                        var selected: String? = null
+                        for (group in tracks.groups) {
+                            if (group.type != C.TRACK_TYPE_AUDIO) continue
+                            for (i in 0 until group.length) {
+                                val format = group.getTrackFormat(i)
+                                if (!group.isTrackSupported(i)) continue
+                                val lang = format.language
+                                val label = format.label
+                                    ?: lang?.let { code ->
+                                        try {
+                                            java.util.Locale(code).displayLanguage
+                                                .replaceFirstChar { it.uppercase() }
+                                        } catch (_: Exception) { code.uppercase() }
+                                    } ?: "Audio ${options.size + 1}"
+                                options.add(AudioTrackOption(language = lang, label = label))
+                                if (selected == null && group.isTrackSelected(i)) {
+                                    selected = lang
+                                }
+                            }
+                        }
+                        audioOptions = options
+                        if (selected != null) {
+                            selectedAudioLang = selected
+                        }
+                    } catch (_: Exception) {}
+                }
                 val listener = object : Player.Listener {
                     override fun onPlaybackStateChanged(playbackState: Int) {
                         if (playbackState == Player.STATE_ENDED) {
-                            if (nextEpisode != null && !isNextEpisodeDismissed) {
-                                onPlayNextEpisode()
-                            }
+                            playbackEnded = true
                         }
+                    }
+                    override fun onTracksChanged(tracks: Tracks) {
+                        refreshAudioOptions()
                     }
                 }
                 exoPlayer.addListener(listener)
@@ -465,8 +567,8 @@ fun MobilePlayerView(
                         player = exoPlayer
                         useController = false
                         keepScreenOn = true
-                        // Saved aspect applies at build; FIT default never crops.
-                        applyVideoZoom(this, zoomState.value)
+                        playerViewRef = this
+                        post { refreshPipHint(this) }
                         subtitleView?.let { subs ->
                             subs.setApplyEmbeddedStyles(false)
                             subs.setStyle(
@@ -511,6 +613,7 @@ fun MobilePlayerView(
                 // update so zoom/FIT changes apply even when resizeMode matches.
                 update = { view ->
                     applyVideoZoom(view, isZoom)
+                    refreshPipHint(view)
                     view.subtitleView?.setBottomPaddingFraction(
                         if (isZoom) 0.08f
                         else letterboxBottomPadding(
@@ -525,6 +628,7 @@ fun MobilePlayerView(
                     try {
                         (view.getTag() as? Player.Listener)?.let { exoPlayer.removeListener(it) }
                     } catch (_: Exception) {}
+                    playerViewRef = null
                 },
             )
 
@@ -680,6 +784,8 @@ fun MobilePlayerView(
                     isPlaying = isPlaying,
                     currentPositionMs = currentPosMs,
                     durationMs = durationMs,
+                    bufferedPositionMs = bufferedMs,
+                    upNextCountdownSec = upNextCountdown,
                     isFullscreen = isFullscreen,
                     isSubtitleEnabled = isSubtitleEnabled,
                     nextEpisode = nextEpisode,
@@ -687,6 +793,7 @@ fun MobilePlayerView(
                     brightnessIndicator = brightnessIndicator,
                     volumeIndicator = volumeIndicator,
                     doubleTapSeekFeedback = doubleTapSeekFeedback,
+                    playbackEnded = playbackEnded,
                     onTogglePlayPause = {
                         if (exoPlayer.isPlaying) exoPlayer.pause() else exoPlayer.play()
                         userInteractionCount++
@@ -714,6 +821,9 @@ fun MobilePlayerView(
                     onToggleLock = {
                         isLocked = !isLocked
                         userInteractionCount++
+                    },
+                    onEnterPip = {
+                        context.findActivity()?.let { PipController.enterPip(it) }
                     },
                     qualityLabel = PlayerQualityPrefs.labelFor(effectiveQuality),
                     onOpenQualityPicker = {
@@ -767,6 +877,44 @@ fun MobilePlayerView(
                     },
                     onDismiss = { showQualitySheet = false }
                 )
+            } else {
+                // PiP mode: system owns the window; offer tap-to-restore plus a
+                // pause-and-restore close affordance (both >= 48dp).
+                val pipActivity = remember(context) { context.findActivity() }
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable(onClick = {
+                            pipActivity?.let { PipController.restoreToFullscreen(it) }
+                        }),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = stringResource(R.string.tap_to_restore),
+                        color = Color.White.copy(alpha = 0.85f),
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    IconButton(
+                        onClick = {
+                            try {
+                                activePlayer?.pause()
+                            } catch (_: Exception) {}
+                            pipActivity?.let { PipController.restoreToFullscreen(it) }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(4.dp)
+                            .size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = stringResource(R.string.close),
+                            tint = Color.White
+                        )
+                    }
+                }
             }
         } else {
             // Idle state: Video not playing automatically, wait for manual user trigger
@@ -811,7 +959,7 @@ fun MobilePlayerView(
                     modifier = Modifier
                         .align(Alignment.TopStart)
                         .padding(12.dp)
-                        .size(36.dp)
+                        .size(48.dp)
                         .background(Color.Black.copy(alpha = 0.5f), CircleShape)
                 ) {
                     Icon(

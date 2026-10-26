@@ -16,7 +16,7 @@ val BackgroundElevated = SurfaceDark
 
 val TextWhite = Color(0xFFFFFFFF)
 val TextMuted = Color(0xFFB3B3B3)
-val TextDim = Color(0xFF808080)
+val TextDim = Color(0xFFB3B3B3)
 val TextSecondary = TextMuted
 
 // Compact metadata row tokens

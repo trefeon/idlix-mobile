@@ -89,8 +89,8 @@ fun MobileMovieCard(
                         Text(
                             text = quality.uppercase(),
                             color = TextWhite,
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold
                         )
                     }
                 }
@@ -129,8 +129,8 @@ fun MobileMovieCard(
                         Text(
                             text = "HD",
                             color = Color.White.copy(alpha = 0.85f),
-                            fontSize = 8.sp,
-                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.SemiBold,
                             modifier = Modifier
                                 .background(
                                     Color.White.copy(alpha = 0.16f),

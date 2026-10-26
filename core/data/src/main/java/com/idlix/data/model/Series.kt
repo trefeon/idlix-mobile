@@ -69,6 +69,7 @@ data class SeriesDetail(
     val viewCount: Long = 0,
     val country: String? = null,
     val status: String? = null,
+    val certification: String? = null,
     val genres: List<Genre> = emptyList(),
     val seasons: List<Season> = emptyList(),
     val cast: List<CastMember> = emptyList(),

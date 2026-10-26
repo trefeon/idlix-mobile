@@ -3,7 +3,9 @@ package com.idlix.mobile.ui.screens.home
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.idlix.data.local.BookmarkStore
 import com.idlix.data.local.WatchHistoryStore
+import com.idlix.data.model.BookmarkItem
 import com.idlix.data.model.MovieItem
 import com.idlix.data.model.SeriesItem
 import com.idlix.data.model.WatchHistoryItem
@@ -11,8 +13,11 @@ import com.idlix.data.repository.IdlixRepository
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 data class HomeUiState(
@@ -34,9 +39,16 @@ class HomeViewModel(
 
     private val repository = IdlixRepository()
     private val historyStore = WatchHistoryStore.getInstance(application.applicationContext)
+    private val bookmarkStore = BookmarkStore.getInstance(application.applicationContext)
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+
+    val bookmarkedSlugs: StateFlow<Set<String>> = bookmarkStore.bookmarkFlow
+        .map { list -> list.mapNotNull { it.slug }.toSet() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
+    private var lastRemovedHistory: WatchHistoryItem? = null
 
     init {
         // Collect unfinished watch history
@@ -76,7 +88,7 @@ class HomeViewModel(
                     _uiState.value = _uiState.value.copy(
                         isLoading = false,
                         isRefreshing = false,
-                        error = "Gagal memuat rekomendasi film & serial. Silakan periksa koneksi internet."
+                        error = "offline"
                     )
                     return@launch
                 }
@@ -99,9 +111,34 @@ class HomeViewModel(
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isRefreshing = false,
-                    error = e.localizedMessage ?: "Failed to load data"
+                    error = "offline"
                 )
             }
+        }
+    }
+
+    fun toggleBookmark(movie: MovieItem) {
+        bookmarkStore.toggleBookmark(
+            BookmarkItem(
+                contentId = movie.id.ifBlank { movie.slug },
+                contentType = "movie",
+                title = movie.title,
+                posterUrl = movie.fullPosterUrl,
+                backdropUrl = movie.fullBackdropUrl,
+                slug = movie.slug
+            )
+        )
+    }
+
+    fun removeHistoryItem(item: WatchHistoryItem) {
+        lastRemovedHistory = item
+        historyStore.removeItem(item.contentId)
+    }
+
+    fun restoreLastRemoved() {
+        lastRemovedHistory?.let {
+            historyStore.restoreItem(it)
+            lastRemovedHistory = null
         }
     }
 }

@@ -19,10 +19,12 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -36,11 +38,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import coil.compose.AsyncImage
 import com.idlix.data.model.WatchHistoryItem
+import com.idlix.mobile.R
 import com.idlix.mobile.ui.theme.ProgressRed
 import com.idlix.mobile.ui.theme.SurfaceVariantDark
-import com.idlix.mobile.ui.theme.TextDim
+import com.idlix.mobile.ui.theme.TextMuted
 import com.idlix.mobile.ui.theme.TextWhite
 
 @Composable
@@ -48,12 +52,13 @@ fun ContinueWatchingSection(
     items: List<WatchHistoryItem>,
     onItemClick: (contentType: String, slug: String) -> Unit,
     modifier: Modifier = Modifier,
-    cardWidth: Dp = 180.dp
+    cardWidth: Dp = 180.dp,
+    onRemoveItem: ((WatchHistoryItem) -> Unit)? = null
 ) {
     if (items.isEmpty()) return
 
     Column(modifier = modifier.fillMaxWidth()) {
-        NetflixSectionHeader(title = "Continue Watching")
+        NetflixSectionHeader(title = stringResource(R.string.continue_watching))
 
         Spacer(modifier = Modifier.height(10.dp))
 
@@ -66,7 +71,8 @@ fun ContinueWatchingSection(
                 ContinueWatchingCard(
                     item = item,
                     cardWidth = cardWidth,
-                    onClick = { onItemClick(item.contentType, slug) }
+                    onClick = { onItemClick(item.contentType, slug) },
+                    onRemove = onRemoveItem?.let { remove -> { remove(item) } }
                 )
             }
         }
@@ -78,7 +84,8 @@ fun ContinueWatchingCard(
     item: WatchHistoryItem,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    cardWidth: Dp = 180.dp
+    cardWidth: Dp = 180.dp,
+    onRemove: (() -> Unit)? = null
 ) {
     Column(
         modifier = modifier
@@ -101,6 +108,26 @@ fun ContinueWatchingCard(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+
+                // Per-card remove: 48dp hit area, top-end over the scrim.
+                if (onRemove != null) {
+                    IconButton(
+                        onClick = onRemove,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.remove),
+                            tint = Color.White,
+                            modifier = Modifier
+                                .size(22.dp)
+                                .background(Color.Black.copy(alpha = 0.6f), CircleShape)
+                                .padding(2.dp)
+                        )
+                    }
+                }
 
                 // Bottom scrim for legibility.
                 Box(
@@ -167,7 +194,7 @@ fun ContinueWatchingCard(
         if (subtitle.isNotBlank()) {
             Text(
                 text = subtitle,
-                color = TextDim,
+                color = TextMuted,
                 fontSize = 10.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

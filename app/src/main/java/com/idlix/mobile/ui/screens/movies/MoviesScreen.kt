@@ -28,13 +28,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.idlix.mobile.R
+import com.idlix.mobile.ui.components.EmptyTitlesState
 import com.idlix.mobile.ui.components.FilterChipRow
 import com.idlix.mobile.ui.components.FilterItem
 import com.idlix.mobile.ui.components.MobileMovieCard
+import com.idlix.mobile.ui.components.OfflineState
 import com.idlix.mobile.ui.components.netflixCardWidth
 import com.idlix.mobile.ui.components.netflixGridColumns
 import com.idlix.mobile.ui.theme.BackgroundDark
@@ -93,7 +97,7 @@ fun MoviesScreen(
             Column(modifier = Modifier.fillMaxSize()) {
                 // Header
                 Text(
-                    text = "Movies",
+                    text = stringResource(R.string.movies),
                     color = TextWhite,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold,
@@ -114,6 +118,14 @@ fun MoviesScreen(
                 if (uiState.isLoading && !uiState.isRefreshing) {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator(color = IdlixRed)
+                    }
+                } else if (uiState.error != null && uiState.movies.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        OfflineState(onRetry = { viewModel.refresh() })
+                    }
+                } else if (uiState.movies.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        EmptyTitlesState(onRetry = { viewModel.refresh() })
                     }
                 } else {
                     LazyVerticalGrid(

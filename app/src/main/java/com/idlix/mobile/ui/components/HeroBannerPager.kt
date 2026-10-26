@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -37,25 +38,23 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
 import coil.compose.AsyncImage
 import com.idlix.data.model.MovieItem
+import com.idlix.mobile.R
 import com.idlix.mobile.ui.theme.BackgroundDark
 import com.idlix.mobile.ui.theme.IdlixRed
 import com.idlix.mobile.ui.theme.TextMuted
 import com.idlix.mobile.ui.theme.TextWhite
 
-/**
- * Netflix-style hero billboard: edge-to-edge backdrop, bottom gradient into the
- * near-black background, compact metadata row (year • age • HD), then
- * Play (white) + My List (translucent dark) CTAs. [heroHeight] grows on tablet
- * breakpoints for a wider billboard.
- */
 @Composable
 fun HeroBannerPager(
     movies: List<MovieItem>,
     onItemClick: (slug: String) -> Unit,
     modifier: Modifier = Modifier,
-    heroHeight: Dp = 520.dp
+    heroHeight: Dp = 520.dp,
+    bookmarkedSlugs: Set<String> = emptySet(),
+    onToggleBookmark: ((MovieItem) -> Unit)? = null
 ) {
     if (movies.isEmpty()) return
 
@@ -166,15 +165,19 @@ fun HeroBannerPager(
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.PlayArrow,
-                                contentDescription = null,
+                                contentDescription = stringResource(R.string.play),
                                 tint = Color.Black
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "Play", color = Color.Black, fontWeight = FontWeight.Bold)
+                            Text(text = stringResource(R.string.play), color = Color.Black, fontWeight = FontWeight.Bold)
                         }
 
+                        val isBookmarked = movie.slug in bookmarkedSlugs
                         Button(
-                            onClick = { onItemClick(movie.slug) },
+                            onClick = {
+                                if (onToggleBookmark != null) onToggleBookmark(movie)
+                                else onItemClick(movie.slug)
+                            },
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = Color.White.copy(alpha = 0.18f),
                                 contentColor = TextWhite
@@ -182,12 +185,18 @@ fun HeroBannerPager(
                             shape = RoundedCornerShape(6.dp)
                         ) {
                             Icon(
-                                imageVector = Icons.Filled.Add,
-                                contentDescription = null,
+                                imageVector = if (isBookmarked) Icons.Filled.Check else Icons.Filled.Add,
+                                contentDescription = stringResource(
+                                    if (isBookmarked) R.string.remove_from_list else R.string.add_to_list
+                                ),
                                 tint = TextWhite
                             )
                             Spacer(modifier = Modifier.width(6.dp))
-                            Text(text = "My List", color = TextWhite, fontWeight = FontWeight.SemiBold)
+                            Text(
+                                text = stringResource(if (isBookmarked) R.string.in_my_list else R.string.my_list),
+                                color = TextWhite,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         }
                     }
                 }

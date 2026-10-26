@@ -67,7 +67,10 @@ fun SubtitleModalBottomSheet(
     onSelectTrack: (SubtitleTrack?) -> Unit,
     onSelectSubdl: (SubdlSubtitle) -> Unit,
     onSearchSubdl: () -> Unit,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    audioTracks: List<AudioTrackOption> = emptyList(),
+    selectedAudioLanguage: String? = null,
+    onSelectAudio: (AudioTrackOption) -> Unit = {}
 ) {
     if (!isVisible) return
 
@@ -119,7 +122,9 @@ fun SubtitleModalBottomSheet(
                         )
                         Spacer(modifier = Modifier.width(10.dp))
                         Text(
-                            text = stringResource(R.string.audio_and_subtitles),
+                            text = stringResource(
+                                if (audioTracks.isNotEmpty()) R.string.audio_and_subtitles else R.string.subtitles
+                            ),
                             fontSize = 18.sp,
                             fontWeight = FontWeight.Bold,
                             color = TextWhite
@@ -154,6 +159,36 @@ fun SubtitleModalBottomSheet(
                         .heightIn(max = listMax),
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
+                    if (audioTracks.isNotEmpty()) {
+                        item {
+                            Text(
+                                text = stringResource(R.string.audio),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(top = sectionTop, bottom = sectionBottom)
+                            )
+                        }
+                        items(audioTracks) { track ->
+                            val isAudioSelected = track.language != null &&
+                                selectedAudioLanguage == track.language
+                            SubtitleOptionItem(
+                                title = track.label,
+                                subtitle = track.language,
+                                isSelected = isAudioSelected,
+                                onClick = { onSelectAudio(track) }
+                            )
+                        }
+                        item {
+                            Text(
+                                text = stringResource(R.string.subtitles),
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = TextSecondary,
+                                modifier = Modifier.padding(top = subdlTop, bottom = sectionBottom)
+                            )
+                        }
+                    }
                     item {
                         val isOffSelected = !isSubtitleEnabled || selectedSubtitle == null
                         SubtitleOptionItem(
@@ -323,7 +358,7 @@ private fun SubtitleOptionItem(
             ) {
                 Icon(
                     imageVector = Icons.Default.Check,
-                    contentDescription = null,
+                    contentDescription = stringResource(R.string.cd_selected),
                     tint = Color.White,
                     modifier = Modifier.size(16.dp)
                 )
@@ -331,7 +366,7 @@ private fun SubtitleOptionItem(
         } else if (showDownloadIcon) {
             Icon(
                 imageVector = Icons.Default.Download,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.cd_download),
                 tint = TextSecondary,
                 modifier = Modifier.size(18.dp)
             )

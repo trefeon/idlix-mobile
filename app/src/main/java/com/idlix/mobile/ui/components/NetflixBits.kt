@@ -102,7 +102,7 @@ fun NetflixSectionHeader(
 fun NetflixMetadataRow(
     matchPercent: Int? = null,
     year: String = "",
-    ageRating: String = "13+",
+    ageRating: String? = null,
     duration: String = "",
     showHd: Boolean = true,
     centered: Boolean = false,
@@ -127,17 +127,20 @@ fun NetflixMetadataRow(
         if (year.isNotBlank()) {
             Text(text = year, color = TextMuted, fontSize = 13.sp)
         }
-        Surface(
-            color = Color.Transparent,
-            shape = RoundedCornerShape(2.dp),
-            border = BorderStroke(1.dp, AgeBadgeBorder)
-        ) {
-            Text(
-                text = ageRating,
-                color = TextMuted,
-                fontSize = 10.sp,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-            )
+        if (!ageRating.isNullOrBlank()) {
+            Surface(
+                color = Color.Transparent,
+                shape = RoundedCornerShape(2.dp),
+                border = BorderStroke(1.dp, AgeBadgeBorder)
+            ) {
+                Text(
+                    text = ageRating,
+                    color = TextMuted,
+                    fontSize = 10.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                )
+            }
         }
         if (duration.isNotBlank()) {
             Text(

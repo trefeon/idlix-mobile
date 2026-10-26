@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
@@ -36,6 +37,7 @@ import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PictureInPictureAlt
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Replay10
 import androidx.compose.material.icons.filled.VolumeUp
@@ -79,9 +81,12 @@ fun MobilePlayerOverlay(
     currentPositionMs: Long,
     durationMs: Long,
     isFullscreen: Boolean,
+    bufferedPositionMs: Long = 0L,
+    upNextCountdownSec: Int? = null,
     isSubtitleEnabled: Boolean,
     nextEpisode: NextEpisodeInfo?,
     isNextEpisodeDismissed: Boolean,
+    playbackEnded: Boolean = false,
     brightnessIndicator: Float?, // 0f..1f or null if not dragging
     volumeIndicator: Float?, // 0f..1f or null if not dragging
     doubleTapSeekFeedback: Int?, // -10 or +10 or null
@@ -93,6 +98,7 @@ fun MobilePlayerOverlay(
     onBackClick: () -> Unit,
     onPlayNextEpisode: () -> Unit,
     onDismissNextEpisode: () -> Unit,
+    onEnterPip: () -> Unit = {},
     onUserInteraction: () -> Unit,
     onToggleControls: () -> Unit,
     isLocked: Boolean = false,
@@ -108,7 +114,7 @@ fun MobilePlayerOverlay(
     val effectivePos = if (isScrubbing) scrubPositionMs.toLong() else currentPositionMs
     val remainingMs = if (durationMs > 0L) (durationMs - currentPositionMs).coerceAtLeast(0L) else Long.MAX_VALUE
     val isNearEnd = durationMs > 60_000L && remainingMs in 0L..90_000L
-    val showNextEpisodeCard = isNearEnd && nextEpisode != null && !isNextEpisodeDismissed
+    val showNextEpisodeCard = (isNearEnd || playbackEnded) && nextEpisode != null && !isNextEpisodeDismissed
 
     Box(modifier = modifier.fillMaxSize()) {
         if (isLocked) {
@@ -132,7 +138,7 @@ fun MobilePlayerOverlay(
                 ) {
                     Icon(
                         imageVector = Icons.Default.LockOpen,
-                        contentDescription = "Unlock controls",
+                        contentDescription = stringResource(R.string.unlock_controls),
                         tint = Color.White,
                         modifier = Modifier.size(28.dp)
                     )
@@ -178,7 +184,7 @@ fun MobilePlayerOverlay(
                 ) {
                     IconButton(
                         onClick = onBackClick,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
@@ -214,6 +220,7 @@ fun MobilePlayerOverlay(
                     // Quality entry next to CC: effective tier chip opens the picker.
                     Box(
                         modifier = Modifier
+                            .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                             .clip(RoundedCornerShape(6.dp))
                             .background(Color.White.copy(alpha = 0.15f))
                             .clickable(onClick = onOpenQualityPicker)
@@ -231,7 +238,7 @@ fun MobilePlayerOverlay(
                     // CC Subtitle button
                     IconButton(
                         onClick = onOpenSubtitlePicker,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.ClosedCaption,
@@ -239,15 +246,29 @@ fun MobilePlayerOverlay(
                             tint = if (isSubtitleEnabled) IdlixRed else Color.White.copy(alpha = 0.7f)
                         )
                     }
+                    // PiP entry: explicit user toggle with source-rect hint.
+                    IconButton(
+                        onClick = {
+                            onUserInteraction()
+                            onEnterPip()
+                        },
+                        modifier = Modifier.size(48.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PictureInPictureAlt,
+                            contentDescription = stringResource(R.string.pip_enter),
+                            tint = Color.White.copy(alpha = 0.7f)
+                        )
+                    }
 
                     // Lock mode toggle
                     IconButton(
                         onClick = onToggleLock,
-                        modifier = Modifier.size(40.dp)
+                        modifier = Modifier.size(48.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Lock,
-                            contentDescription = "Lock controls",
+                            contentDescription = stringResource(R.string.lock_controls),
                             tint = Color.White.copy(alpha = 0.7f)
                         )
                     }
@@ -281,7 +302,7 @@ fun MobilePlayerOverlay(
                     ) {
                         Icon(
                             imageVector = if (isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
-                            contentDescription = if (isPlaying) "Pause" else "Play",
+                            contentDescription = stringResource(if (isPlaying) R.string.pause else R.string.play),
                             tint = Color.White,
                             modifier = Modifier.size(38.dp)
                         )
@@ -344,28 +365,56 @@ fun MobilePlayerOverlay(
                             )
                         }
                     }
-                    Slider(
-                        value = effectivePos.toFloat(),
-                        onValueChange = { newPos ->
-                            isScrubbing = true
-                            scrubPositionMs = newPos
-                            onUserInteraction()
-                        },
-                        onValueChangeFinished = {
-                            isScrubbing = false
-                            onSeekTo(scrubPositionMs.toLong())
-                            onUserInteraction()
-                        },
-                        valueRange = 0f..(durationMs.coerceAtLeast(1L).toFloat()),
-                        colors = SliderDefaults.colors(
-                            thumbColor = IdlixRed,
-                            activeTrackColor = IdlixRed,
-                            inactiveTrackColor = Color.White.copy(alpha = 0.3f)
-                        ),
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(28.dp)
-                    )
+                            .height(28.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        // Base rail.
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp)
+                                .clip(RoundedCornerShape(2.dp))
+                                .background(Color.White.copy(alpha = 0.3f))
+                        )
+                        // Buffered rail (YouTube-style gray behind the red played rail).
+                        if (durationMs > 0L && bufferedPositionMs > 0L) {
+                            val bufferedFraction =
+                                (bufferedPositionMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth(fraction = bufferedFraction)
+                                    .height(4.dp)
+                                    .align(Alignment.CenterStart)
+                                    .clip(RoundedCornerShape(2.dp))
+                                    .background(Color.White.copy(alpha = 0.55f))
+                            )
+                        }
+                        Slider(
+                            value = effectivePos.toFloat(),
+                            onValueChange = { newPos ->
+                                isScrubbing = true
+                                scrubPositionMs = newPos
+                                onUserInteraction()
+                            },
+                            onValueChangeFinished = {
+                                isScrubbing = false
+                                onSeekTo(scrubPositionMs.toLong())
+                                onUserInteraction()
+                            },
+                            valueRange = 0f..(durationMs.coerceAtLeast(1L).toFloat()),
+                            colors = SliderDefaults.colors(
+                                thumbColor = IdlixRed,
+                                activeTrackColor = IdlixRed,
+                                activeTickColor = IdlixRed,
+                                inactiveTrackColor = Color.Transparent,
+                                inactiveTickColor = Color.Transparent
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
 
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -386,6 +435,7 @@ fun MobilePlayerOverlay(
                         ) {
                             Box(
                                 modifier = Modifier
+                                    .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(Color.White.copy(alpha = 0.15f))
                                     .clickable(onClick = onOpenQualityPicker)
@@ -401,7 +451,7 @@ fun MobilePlayerOverlay(
                             }
                             IconButton(
                                 onClick = onToggleFullscreen,
-                                modifier = Modifier.size(36.dp)
+                                modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                     imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
@@ -560,7 +610,7 @@ fun MobilePlayerOverlay(
                         )
                         IconButton(
                             onClick = onDismissNextEpisode,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier.size(48.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Close,
@@ -580,6 +630,18 @@ fun MobilePlayerOverlay(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (upNextCountdownSec != null) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = stringResource(
+                                R.string.next_episode_in_seconds,
+                                upNextCountdownSec.coerceAtLeast(0)
+                            ),
+                            color = TextMuted,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
 
                     Spacer(modifier = Modifier.height(10.dp))
                     Row(

@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -72,6 +73,8 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import coil.compose.AsyncImage
+import com.idlix.data.local.BookmarkStore
+import com.idlix.data.model.BookmarkItem
 import com.idlix.data.model.CastMember
 import com.idlix.data.model.EpisodeItem
 import com.idlix.data.net.IdlixDomainResolver
@@ -79,6 +82,7 @@ import com.idlix.mobile.R
 import com.idlix.mobile.ui.components.NetflixMetadataRow
 import com.idlix.mobile.ui.components.matchPercentForVote
 import com.idlix.mobile.ui.screens.detail.components.MobilePlayerView
+import com.idlix.mobile.ui.screens.detail.components.AudioTrackOption
 import com.idlix.mobile.ui.screens.detail.components.SubtitleModalBottomSheet
 import com.idlix.mobile.ui.screens.detail.components.findActivity
 import com.idlix.mobile.ui.theme.BackgroundDark
@@ -97,10 +101,14 @@ fun DetailScreen(
     viewModel: DetailViewModel = viewModel()
 ) {
     val context = LocalContext.current
+    val bookmarkStore = remember(context) { BookmarkStore.getInstance(context) }
     val uiState by viewModel.uiState.collectAsState()
     var isFullscreen by rememberSaveable { mutableStateOf(false) }
     var isOverviewExpanded by remember { mutableStateOf(false) }
-    var isBookmarked by rememberSaveable { mutableStateOf(false) }
+    val bookmarks by bookmarkStore.bookmarkFlow.collectAsState()
+    var audioOptions by remember { mutableStateOf<List<AudioTrackOption>>(emptyList()) }
+    var selectedAudioLang by remember { mutableStateOf<String?>(null) }
+    var audioSelectHandler by remember { mutableStateOf<((AudioTrackOption) -> Unit)?>(null) }
 
     val activity = remember(context) { context.findActivity() }
 
@@ -222,6 +230,11 @@ fun DetailScreen(
                     onDismissNextEpisode = { viewModel.dismissNextEpisode() },
                     onRetryPlayback = { viewModel.retryPlayback() },
                     onSaveProgress = { pos, dur -> viewModel.saveProgress(pos, dur) },
+                    onAudioOptionsChanged = { opts, sel ->
+                        audioOptions = opts
+                        selectedAudioLang = sel
+                    },
+                    onRegisterAudioSelect = { handler -> audioSelectHandler = handler },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -260,26 +273,51 @@ fun DetailScreen(
                         val playingEp = uiState.playingEpisode
                         val selectedEp = uiState.selectedEpisode ?: uiState.episodes.firstOrNull()
                         if (uiState.resolvedStream != null && playingEp != null) {
-                            "Sedang Diputar: S${uiState.playingSeasonNumber ?: (uiState.selectedSeason?.seasonNumber ?: 1)}E${playingEp.episodeNumber}"
+                            stringResource(
+                                R.string.now_playing_episode,
+                                uiState.playingSeasonNumber ?: (uiState.selectedSeason?.seasonNumber ?: 1),
+                                playingEp.episodeNumber
+                            )
                         } else if (selectedEp != null) {
-                            "Putar S${uiState.selectedSeason?.seasonNumber ?: 1}E${selectedEp.episodeNumber}: ${selectedEp.name}"
+                            stringResource(
+                                R.string.play_season_episode,
+                                uiState.selectedSeason?.seasonNumber ?: 1,
+                                selectedEp.episodeNumber,
+                                selectedEp.name
+                            )
                         } else {
                             stringResource(R.string.play_now)
                         }
                     } else {
                         if (uiState.resolvedStream != null) {
-                            "Sedang Diputar"
+                            stringResource(R.string.now_playing)
                         } else {
                             stringResource(R.string.play_now)
                         }
                     }
+                    val detailBookmarkId = uiState.movie?.id?.ifBlank { slug }
+                        ?: uiState.series?.id?.ifBlank { slug } ?: slug
+                    val isBookmarked = bookmarks.any { it.contentId == detailBookmarkId }
+                    val onBookmarkToggle: () -> Unit = {
+                        bookmarkStore.toggleBookmark(
+                            BookmarkItem(
+                                contentId = detailBookmarkId,
+                                contentType = if (uiState.movie != null) "movie" else "series",
+                                title = title,
+                                posterUrl = uiState.movie?.fullPosterUrl ?: uiState.series?.fullPosterUrl,
+                                backdropUrl = uiState.movie?.fullBackdropUrl ?: uiState.series?.fullBackdropUrl,
+                                slug = slug
+                            )
+                        )
+                    }
+                    val cert = uiState.movie?.certification ?: uiState.series?.certification
                     val onShareClick = {
                         val sendIntent = Intent().apply {
                             action = Intent.ACTION_SEND
                             putExtra(Intent.EXTRA_TEXT, "Watch $title on IDLIX: ${IdlixDomainResolver.currentBaseUrl().trimEnd('/')}/$contentType/$slug")
                             type = "text/plain"
                         }
-                        context.startActivity(Intent.createChooser(sendIntent, "Share"))
+                        context.startActivity(Intent.createChooser(sendIntent, context.getString(R.string.share)))
                     }
                     BoxWithConstraints(
                         modifier = Modifier
@@ -301,11 +339,12 @@ fun DetailScreen(
                                         title = title,
                                         matchPercent = matchPercentForVote(rawVoteAverage?.toDoubleOrNull()),
                                         year = year,
+                                        ageRating = cert,
                                         durationText = durationText,
                                         playButtonText = playButtonText,
                                         onPlayClick = { viewModel.playCurrentMedia() },
                                         isBookmarked = isBookmarked,
-                                        onBookmarkToggle = { isBookmarked = !isBookmarked },
+                                        onBookmarkToggle = onBookmarkToggle,
                                         onShareClick = onShareClick,
                                         genres = genres,
                                         overview = overview,
@@ -339,11 +378,12 @@ fun DetailScreen(
                                         title = title,
                                         matchPercent = matchPercentForVote(rawVoteAverage?.toDoubleOrNull()),
                                         year = year,
+                                        ageRating = cert,
                                         durationText = durationText,
                                         playButtonText = playButtonText,
                                         onPlayClick = { viewModel.playCurrentMedia() },
                                         isBookmarked = isBookmarked,
-                                        onBookmarkToggle = { isBookmarked = !isBookmarked },
+                                        onBookmarkToggle = onBookmarkToggle,
                                         onShareClick = onShareClick,
                                         genres = genres,
                                         overview = overview,
@@ -377,7 +417,10 @@ fun DetailScreen(
             onSelectTrack = { viewModel.selectSubtitleTrack(it) },
             onSelectSubdl = { viewModel.selectSubdlSubtitle(it) {} },
             onSearchSubdl = { viewModel.searchSubdlSubtitles() },
-            onDismiss = { viewModel.closeSubtitlePicker() }
+            onDismiss = { viewModel.closeSubtitlePicker() },
+            audioTracks = audioOptions,
+            selectedAudioLanguage = selectedAudioLang,
+            onSelectAudio = { audioSelectHandler?.invoke(it) }
         )
     }
 }
@@ -425,7 +468,7 @@ private fun EpisodeCardItem(
                     ) {
                         Icon(
                             imageVector = Icons.Default.PlayArrow,
-                            contentDescription = null,
+                            contentDescription = stringResource(R.string.play),
                             tint = IdlixRed,
                             modifier = Modifier.size(24.dp)
                         )
@@ -499,7 +542,7 @@ private fun CastItem(cast: CastMember) {
             Text(
                 text = castChar,
                 color = TextMuted,
-                fontSize = 9.sp,
+                fontSize = 10.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -517,6 +560,7 @@ private fun DetailInfoColumn(
     title: String,
     matchPercent: Int?,
     year: String,
+    ageRating: String? = null,
     durationText: String,
     playButtonText: String,
     onPlayClick: () -> Unit,
@@ -540,6 +584,7 @@ private fun DetailInfoColumn(
         NetflixMetadataRow(
             matchPercent = matchPercent,
             year = year,
+            ageRating = ageRating,
             duration = durationText
         )
         Spacer(modifier = Modifier.height(14.dp))
@@ -554,7 +599,7 @@ private fun DetailInfoColumn(
         ) {
             Icon(
                 imageVector = Icons.Default.PlayArrow,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.play),
                 tint = Color.White,
                 modifier = Modifier.size(24.dp)
             )
@@ -583,19 +628,23 @@ private fun DetailInfoColumn(
                     .clickable(onClick = onBookmarkToggle)
             ) {
                 Row(
-                    modifier = Modifier.padding(vertical = 10.dp),
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .padding(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = if (isBookmarked) Icons.Default.Bookmark else Icons.Default.BookmarkBorder,
-                        contentDescription = null,
+                        contentDescription = stringResource(
+                            if (isBookmarked) R.string.remove_from_list else R.string.add_to_list
+                        ),
                         tint = if (isBookmarked) IdlixRed else Color.White,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isBookmarked) "Di Daftar Saya" else stringResource(R.string.my_list),
+                        text = stringResource(if (isBookmarked) R.string.in_my_list else R.string.my_list),
                         color = TextWhite,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium
@@ -612,19 +661,21 @@ private fun DetailInfoColumn(
                     .clickable(onClick = onShareClick)
             ) {
                 Row(
-                    modifier = Modifier.padding(vertical = 10.dp),
+                    modifier = Modifier
+                        .heightIn(min = 48.dp)
+                        .padding(horizontal = 8.dp),
                     horizontalArrangement = Arrangement.Center,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
                         imageVector = Icons.Default.Share,
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.share),
                         tint = Color.White,
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Bagikan",
+                        text = stringResource(R.string.share),
                         color = TextWhite,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Medium
@@ -675,7 +726,7 @@ private fun DetailInfoColumn(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
                 Text(
-                    text = if (isOverviewExpanded) "Tutup" else "Selengkapnya",
+                    text = stringResource(if (isOverviewExpanded) R.string.show_less else R.string.show_more),
                     color = IdlixRed,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold
