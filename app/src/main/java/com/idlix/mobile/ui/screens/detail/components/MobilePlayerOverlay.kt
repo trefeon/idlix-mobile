@@ -91,7 +91,8 @@ fun MobilePlayerOverlay(
     onPlayNextEpisode: () -> Unit,
     onDismissNextEpisode: () -> Unit,
     onUserInteraction: () -> Unit,
-    modifier: Modifier = Modifier
+    onToggleControls: () -> Unit,
+     modifier: Modifier = Modifier
 ) {
     var isScrubbing by remember { mutableStateOf(false) }
     var scrubPositionMs by remember { mutableFloatStateOf(0f) }
@@ -115,7 +116,7 @@ fun MobilePlayerOverlay(
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null,
-                        onClick = onUserInteraction
+                        onClick = onToggleControls
                     )
             ) {
                 // Top Bar

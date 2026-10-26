@@ -85,13 +85,13 @@ tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 fun letterboxBottomPadding(viewW: Float, viewH: Float, videoW: Float, videoH: Float): Float {
-    if (viewW <= 0f || viewH <= 0f || videoW <= 0f || videoH <= 0f) return 0.08f
+    if (viewW <= 0f || viewH <= 0f || videoW <= 0f || videoH <= 0f) return 0.12f
     val videoAspect = videoW / videoH
-    if (videoAspect <= 0f) return 0.08f
+    if (videoAspect <= 0f) return 0.12f
     val displayedH = viewW / videoAspect
     val barFraction = ((viewH - displayedH) / 2f / viewH).coerceAtLeast(0f)
-    if (barFraction <= 0f) return 0.08f
-    return (barFraction + 0.02f).coerceIn(0.02f, 0.45f)
+    if (barFraction <= 0f) return 0.12f
+    return (barFraction + 0.06f).coerceIn(0.12f, 0.50f)
 }
 
 @OptIn(UnstableApi::class)
@@ -377,7 +377,7 @@ fun MobilePlayerView(
                                 )
                             )
                             subs.setUserDefaultTextSize()
-                            subs.setBottomPaddingFraction(0.08f)
+                            subs.setBottomPaddingFraction(0.12f)
                             fun refreshPadding() {
                                 val vs = exoPlayer.videoSize
                                 subs.setBottomPaddingFraction(
@@ -508,7 +508,11 @@ fun MobilePlayerView(
                     onBackClick = onBackClick,
                     onPlayNextEpisode = onPlayNextEpisode,
                     onDismissNextEpisode = onDismissNextEpisode,
-                    onUserInteraction = { userInteractionCount++ }
+                    onUserInteraction = { userInteractionCount++ },
+                    onToggleControls = {
+                        showControls = !showControls
+                        userInteractionCount++
+                    }
                 )
             }
         } else {
