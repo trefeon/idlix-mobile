@@ -8,7 +8,11 @@ import android.net.Uri
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -122,6 +126,17 @@ fun applyPlayerQuality(player: ExoPlayer, effective: String) {
     player.trackSelectionParameters = updated.build()
 }
 
+/**
+ * Applies the aspect live on an existing PlayerView (no ExoPlayer rebuild).
+ * Zoom-aware subtitle rule lives with the caller: Zoom has no letterbox
+ * bars, so the subtitle bottom padding falls back to the 0.12 default.
+ */
+fun applyVideoZoom(playerView: PlayerView, zoom: Boolean) {
+    playerView.resizeMode =
+        if (zoom) androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+        else androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+}
+
 @OptIn(UnstableApi::class)
 @Composable
 fun MobilePlayerView(
@@ -166,6 +181,12 @@ fun MobilePlayerView(
     var requestedQuality by remember { mutableStateOf(PlayerQualityPrefs.getQuality(context)) }
     var playbackSpeed by remember { mutableStateOf(PlayerQualityPrefs.getSpeed(context)) }
     var isDataSaver by remember { mutableStateOf(PlayerQualityPrefs.isDataSaver(context)) }
+    // Zoom-fill aspect holder as a stable State object so the PlayerView
+    // factory's padding listeners always read the live value.
+    val zoomState = remember { mutableStateOf(PlayerQualityPrefs.isVideoZoom(context)) }
+    var isZoom by zoomState
+    // Transient pinch-toggle feedback chip ("Zoom · Fill" / "Fit · Full picture").
+    var zoomFeedback by remember { mutableStateOf<Boolean?>(null) }
     var isLocked by remember { mutableStateOf(false) }
     var showQualitySheet by remember { mutableStateOf(false) }
     val effectiveQuality = PlayerQualityPrefs.effectiveQuality(requestedQuality, isDataSaver)
@@ -179,6 +200,7 @@ fun MobilePlayerView(
             requestedQuality = PlayerQualityPrefs.getQuality(context)
             playbackSpeed = PlayerQualityPrefs.getSpeed(context)
             isDataSaver = PlayerQualityPrefs.isDataSaver(context)
+            isZoom = PlayerQualityPrefs.isVideoZoom(context)
         }
         sp.registerOnSharedPreferenceChangeListener(listener)
         onDispose { sp.unregisterOnSharedPreferenceChangeListener(listener) }
@@ -442,6 +464,8 @@ fun MobilePlayerView(
                         player = exoPlayer
                         useController = false
                         keepScreenOn = true
+                        // Saved aspect applies at build; FIT default never crops.
+                        applyVideoZoom(this, zoomState.value)
                         subtitleView?.let { subs ->
                             subs.setApplyEmbeddedStyles(false)
                             subs.setStyle(
@@ -458,8 +482,12 @@ fun MobilePlayerView(
                             subs.setBottomPaddingFraction(0.12f)
                             fun refreshPadding() {
                                 val vs = exoPlayer.videoSize
+                                // Zoom fills the frame (no letterbox bars), so
+                                // subtitles fall back to the 0.12 default;
+                                // FIT keeps the letterbox-derived lift.
                                 subs.setBottomPaddingFraction(
-                                    letterboxBottomPadding(
+                                    if (zoomState.value) 0.12f
+                                    else letterboxBottomPadding(
                                         width.toFloat(),
                                         height.toFloat(),
                                         vs.width.toFloat(),
@@ -476,6 +504,27 @@ fun MobilePlayerView(
                             )
                             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> refreshPadding() }
                         }
+                    }
+                },
+                // Live aspect switch (pinch / sheet row): guarded so the 500ms
+                // position-sync recompositions don't churn layout.
+                update = { view ->
+                    val target = if (isZoom) {
+                        androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
+                    } else {
+                        androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
+                    }
+                    if (view.resizeMode != target) {
+                        applyVideoZoom(view, isZoom)
+                        view.subtitleView?.setBottomPaddingFraction(
+                            if (isZoom) 0.12f
+                            else letterboxBottomPadding(
+                                view.width.toFloat(),
+                                view.height.toFloat(),
+                                exoPlayer.videoSize.width.toFloat(),
+                                exoPlayer.videoSize.height.toFloat()
+                            )
+                        )
                     }
                 },
                 modifier = Modifier.fillMaxSize()
@@ -584,6 +633,44 @@ fun MobilePlayerView(
                                 }
                             )
                         }
+                        .pointerInput(Unit) {
+                            // Pinch-to-zoom (two-pointer only): toggles Fit<->Zoom
+                            // live. Single-pointer tap / double-tap /
+                            // vertical-drag detectors above are untouched —
+                            // this loop never consumes until a second finger
+                            // lands, and its accumulator resets per gesture.
+                            // Consuming during a real pinch makes the
+                            // vertical-drag detector bow out (no fighting).
+                            awaitEachGesture {
+                                awaitFirstDown()
+                                var accum = 1f
+                                var pinching = false
+                                var done = false
+                                while (!done) {
+                                    val event = awaitPointerEvent()
+                                    val pressed = event.changes.filter { it.pressed }
+                                    if (pressed.size >= 2) {
+                                        pinching = true
+                                        event.changes.forEach { it.consume() }
+                                        accum *= event.calculateZoom()
+                                        if (accum >= 1.25f || accum <= 0.8f) {
+                                            val zoomed = !zoomState.value
+                                            zoomState.value = zoomed
+                                            PlayerQualityPrefs.setVideoZoom(context, zoomed)
+                                            zoomFeedback = zoomed
+                                            userInteractionCount++
+                                            scope.launch {
+                                                delay(1200)
+                                                if (zoomFeedback == zoomed) zoomFeedback = null
+                                            }
+                                            done = true
+                                        }
+                                    } else if (pinching || pressed.isEmpty()) {
+                                        done = true
+                                    }
+                                }
+                            }
+                        }
                 )
                 }
 
@@ -638,12 +725,32 @@ fun MobilePlayerView(
                     playbackSpeed = playbackSpeed
                 )
 
+                // Pinch-toggle feedback chip (auto-hides after 1.2s).
+                zoomFeedback?.let { zoomed ->
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 64.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        color = Color.Black.copy(alpha = 0.7f)
+                    ) {
+                        Text(
+                            text = if (zoomed) "Zoom · Fill screen" else "Fit · Full picture",
+                            color = Color.White,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)
+                        )
+                    }
+                }
+
                 // Quality + speed picker (Auto/1080p/720p/480p + 0.5x-2x)
                 QualityPickerBottomSheet(
                     isVisible = showQualitySheet,
                     selectedQuality = requestedQuality,
                     effectiveQuality = effectiveQuality,
                     isDataSaver = isDataSaver,
+                    isZoom = isZoom,
                     selectedSpeed = playbackSpeed,
                     onSelectQuality = { quality ->
                         requestedQuality = quality
@@ -653,6 +760,11 @@ fun MobilePlayerView(
                     onSelectSpeed = { speed ->
                         playbackSpeed = speed
                         PlayerQualityPrefs.setSpeed(context, speed)
+                        userInteractionCount++
+                    },
+                    onSelectAspect = { zoom ->
+                        isZoom = zoom
+                        PlayerQualityPrefs.setVideoZoom(context, zoom)
                         userInteractionCount++
                     },
                     onDismiss = { showQualitySheet = false }

@@ -16,7 +16,7 @@ object PlayerQualityPrefs {
     private const val KEY_QUALITY = "player_quality"
     private const val KEY_SPEED = "player_speed"
     private const val KEY_DATA_SAVER = "player_data_saver"
-
+    private const val KEY_VIDEO_ZOOM = "player_video_zoom"
     const val QUALITY_AUTO = "auto"
     const val QUALITY_1080 = "1080p"
     const val QUALITY_720 = "720p"
@@ -51,6 +51,19 @@ object PlayerQualityPrefs {
 
     fun setDataSaver(context: Context, enabled: Boolean) {
         prefs(context).edit().putBoolean(KEY_DATA_SAVER, enabled).apply()
+    }
+
+    /**
+     * Opt-in Zoom-fill aspect. FIT (false, default) shows the entire picture
+     * without cropping; Zoom (true) fills the screen, cropping the long
+     * edges. Applied via PlayerView resizeMode live (no player rebuild).
+     * NEVER RESIZE_MODE_FILL (would stretch).
+     */
+    fun isVideoZoom(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_VIDEO_ZOOM, false)
+
+    fun setVideoZoom(context: Context, zoom: Boolean) {
+        prefs(context).edit().putBoolean(KEY_VIDEO_ZOOM, zoom).apply()
     }
 
     /**

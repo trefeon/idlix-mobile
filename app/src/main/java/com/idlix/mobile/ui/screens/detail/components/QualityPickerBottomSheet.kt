@@ -68,9 +68,11 @@ fun QualityPickerBottomSheet(
     selectedQuality: String,
     effectiveQuality: String,
     isDataSaver: Boolean,
+    isZoom: Boolean = false,
     selectedSpeed: Float,
     onSelectQuality: (String) -> Unit,
     onSelectSpeed: (Float) -> Unit,
+    onSelectAspect: (Boolean) -> Unit = {},
     onDismiss: () -> Unit
 ) {
     if (!isVisible) return
@@ -142,6 +144,59 @@ fun QualityPickerBottomSheet(
                         onClick = { onSelectQuality(option.key) }
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.size(10.dp))
+
+            Text(
+                text = "Picture size",
+                fontSize = 15.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextWhite
+            )
+
+            Spacer(modifier = Modifier.size(8.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = !isZoom,
+                    onClick = { onSelectAspect(false) },
+                    label = {
+                        Text(
+                            text = "Fit · Full picture",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = IdlixRed,
+                        selectedLabelColor = Color.White,
+                        containerColor = Color.White.copy(alpha = 0.08f),
+                        labelColor = TextMuted
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
+                FilterChip(
+                    selected = isZoom,
+                    onClick = { onSelectAspect(true) },
+                    label = {
+                        Text(
+                            text = "Zoom · Fill screen",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = IdlixRed,
+                        selectedLabelColor = Color.White,
+                        containerColor = Color.White.copy(alpha = 0.08f),
+                        labelColor = TextMuted
+                    ),
+                    modifier = Modifier.weight(1f)
+                )
             }
 
             HorizontalDivider(
