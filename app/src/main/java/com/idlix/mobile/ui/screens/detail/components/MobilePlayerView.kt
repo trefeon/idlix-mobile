@@ -91,13 +91,13 @@ tailrec fun Context.findActivity(): Activity? = when (this) {
 }
 
 fun letterboxBottomPadding(viewW: Float, viewH: Float, videoW: Float, videoH: Float): Float {
-    if (viewW <= 0f || viewH <= 0f || videoW <= 0f || videoH <= 0f) return 0.12f
+    if (viewW <= 0f || viewH <= 0f || videoW <= 0f || videoH <= 0f) return 0.08f
     val videoAspect = videoW / videoH
-    if (videoAspect <= 0f) return 0.12f
+    if (videoAspect <= 0f) return 0.08f
     val displayedH = viewW / videoAspect
     val barFraction = ((viewH - displayedH) / 2f / viewH).coerceAtLeast(0f)
-    if (barFraction <= 0f) return 0.12f
-    return (barFraction + 0.06f).coerceIn(0.12f, 0.50f)
+    if (barFraction <= 0f) return 0.08f
+    return (barFraction + 0.04f).coerceIn(0.08f, 0.50f)
 }
 
 /**
@@ -129,7 +129,7 @@ fun applyPlayerQuality(player: ExoPlayer, effective: String) {
 /**
  * Applies the aspect live on an existing PlayerView (no ExoPlayer rebuild).
  * Zoom-aware subtitle rule lives with the caller: Zoom has no letterbox
- * bars, so the subtitle bottom padding falls back to the 0.12 default.
+ * bars, so the subtitle bottom padding falls back to the 0.08 default.
  */
 fun applyVideoZoom(playerView: PlayerView, zoom: Boolean) {
     playerView.resizeMode =
@@ -479,55 +479,52 @@ fun MobilePlayerView(
                                 )
                             )
                             subs.setUserDefaultTextSize()
-                            subs.setBottomPaddingFraction(0.12f)
-                            fun refreshPadding() {
-                                val vs = exoPlayer.videoSize
+                            subs.setBottomPaddingFraction(0.08f)
+                            fun refreshPadding(videoSize: VideoSize = exoPlayer.videoSize) {
                                 // Zoom fills the frame (no letterbox bars), so
-                                // subtitles fall back to the 0.12 default;
+                                // subtitles fall back to the 0.08 default;
                                 // FIT keeps the letterbox-derived lift.
                                 subs.setBottomPaddingFraction(
-                                    if (zoomState.value) 0.12f
+                                    if (zoomState.value) 0.08f
                                     else letterboxBottomPadding(
                                         width.toFloat(),
                                         height.toFloat(),
-                                        vs.width.toFloat(),
-                                        vs.height.toFloat()
+                                        videoSize.width.toFloat(),
+                                        videoSize.height.toFloat()
                                     )
                                 )
                             }
-                            exoPlayer.addListener(
-                                object : Player.Listener {
-                                    override fun onVideoSizeChanged(videoSize: VideoSize) {
-                                        refreshPadding()
-                                    }
+                            val subtitleSizeListener = object : Player.Listener {
+                                override fun onVideoSizeChanged(videoSize: VideoSize) {
+                                    refreshPadding(videoSize)
                                 }
-                            )
+                            }
+                            exoPlayer.addListener(subtitleSizeListener)
+                            // Stashed for onRelease so the listener is removed with the view.
+                            setTag(subtitleSizeListener)
                             addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> refreshPadding() }
                         }
                     }
                 },
-                // Live aspect switch (pinch / sheet row): guarded so the 500ms
-                // position-sync recompositions don't churn layout.
+                // Live aspect switch (pinch / sheet row): padding refreshes on every
+                // update so zoom/FIT changes apply even when resizeMode matches.
                 update = { view ->
-                    val target = if (isZoom) {
-                        androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                    } else {
-                        androidx.media3.ui.AspectRatioFrameLayout.RESIZE_MODE_FIT
-                    }
-                    if (view.resizeMode != target) {
-                        applyVideoZoom(view, isZoom)
-                        view.subtitleView?.setBottomPaddingFraction(
-                            if (isZoom) 0.12f
-                            else letterboxBottomPadding(
-                                view.width.toFloat(),
-                                view.height.toFloat(),
-                                exoPlayer.videoSize.width.toFloat(),
-                                exoPlayer.videoSize.height.toFloat()
-                            )
+                    applyVideoZoom(view, isZoom)
+                    view.subtitleView?.setBottomPaddingFraction(
+                        if (isZoom) 0.08f
+                        else letterboxBottomPadding(
+                            view.width.toFloat(),
+                            view.height.toFloat(),
+                            exoPlayer.videoSize.width.toFloat(),
+                            exoPlayer.videoSize.height.toFloat()
                         )
-                    }
+                    )
                 },
-                modifier = Modifier.fillMaxSize()
+                onRelease = { view ->
+                    try {
+                        (view.getTag() as? Player.Listener)?.let { exoPlayer.removeListener(it) }
+                    } catch (_: Exception) {}
+                },
             )
 
             // Gesture layer + overlay. Lock hides the gesture layer entirely;

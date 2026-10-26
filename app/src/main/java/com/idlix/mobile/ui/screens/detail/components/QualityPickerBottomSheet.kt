@@ -1,6 +1,9 @@
 package com.idlix.mobile.ui.screens.detail.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.clip
 import androidx.compose.foundation.layout.Arrangement
@@ -94,159 +97,168 @@ fun QualityPickerBottomSheet(
             }
         }
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 32.dp)
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.HighQuality,
-                    contentDescription = null,
-                    tint = IdlixRed,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    text = "Quality",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextWhite
-                )
-            }
-
-            if (isDataSaver) {
-                Spacer(modifier = Modifier.size(8.dp))
-                Text(
-                    text = "Data Saver ON — capped at 720p",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = IdlixRed
-                )
-            }
-
-            Spacer(modifier = Modifier.size(10.dp))
-
-            LazyColumn(
+        BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+            val compact = maxHeight < 500.dp
+            val bottomPad = if (compact) 16.dp else 32.dp
+            val gapLarge = if (compact) 5.dp else 10.dp
+            val gapSmall = if (compact) 4.dp else 8.dp
+            val dividerPad = if (compact) 7.dp else 14.dp
+            val listMax = if (compact) 180.dp else 300.dp
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 300.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 20.dp)
+                    .padding(bottom = bottomPad)
             ) {
-                items(QUALITY_OPTIONS) { option ->
-                    val isSelected = selectedQuality == option.key
-                    val isEffective = effectiveQuality == option.key
-                    QualityOptionItem(
-                        title = option.title + if (isEffective && selectedQuality != effectiveQuality) " · active" else "",
-                        subtitle = option.subtitle,
-                        isSelected = isSelected,
-                        onClick = { onSelectQuality(option.key) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.HighQuality,
+                        contentDescription = null,
+                        tint = IdlixRed,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Quality",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextWhite
                     )
                 }
-            }
 
-            Spacer(modifier = Modifier.size(10.dp))
+                if (isDataSaver) {
+                    Spacer(modifier = Modifier.size(gapSmall))
+                    Text(
+                        text = "Data Saver ON — capped at 720p",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = IdlixRed
+                    )
+                }
 
-            Text(
-                text = "Picture size",
-                fontSize = 15.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextWhite
-            )
+                Spacer(modifier = Modifier.size(gapLarge))
 
-            Spacer(modifier = Modifier.size(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = !isZoom,
-                    onClick = { onSelectAspect(false) },
-                    label = {
-                        Text(
-                            text = "Fit · Full picture",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = listMax),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(QUALITY_OPTIONS) { option ->
+                        val isSelected = selectedQuality == option.key
+                        val isEffective = effectiveQuality == option.key
+                        QualityOptionItem(
+                            title = option.title + if (isEffective && selectedQuality != effectiveQuality) " · active" else "",
+                            subtitle = option.subtitle,
+                            isSelected = isSelected,
+                            onClick = { onSelectQuality(option.key) }
                         )
-                    },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = IdlixRed,
-                        selectedLabelColor = Color.White,
-                        containerColor = Color.White.copy(alpha = 0.08f),
-                        labelColor = TextMuted
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-                FilterChip(
-                    selected = isZoom,
-                    onClick = { onSelectAspect(true) },
-                    label = {
-                        Text(
-                            text = "Zoom · Fill screen",
-                            fontSize = 13.sp,
-                            fontWeight = FontWeight.Bold
-                        )
-                    },
-                    colors = FilterChipDefaults.filterChipColors(
-                        selectedContainerColor = IdlixRed,
-                        selectedLabelColor = Color.White,
-                        containerColor = Color.White.copy(alpha = 0.08f),
-                        labelColor = TextMuted
-                    ),
-                    modifier = Modifier.weight(1f)
-                )
-            }
+                    }
+                }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(vertical = 14.dp),
-                color = Color.White.copy(alpha = 0.1f)
-            )
+                Spacer(modifier = Modifier.size(gapLarge))
 
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Default.Speed,
-                    contentDescription = null,
-                    tint = IdlixRed,
-                    modifier = Modifier.size(24.dp)
-                )
-                Spacer(modifier = Modifier.width(10.dp))
                 Text(
-                    text = "Playback speed",
-                    fontSize = 18.sp,
+                    text = "Picture size",
+                    fontSize = 15.sp,
                     fontWeight = FontWeight.Bold,
                     color = TextWhite
                 )
-            }
 
-            Spacer(modifier = Modifier.size(10.dp))
+                Spacer(modifier = Modifier.size(gapSmall))
 
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                PlayerQualityPrefs.SPEED_OPTIONS.chunked(3).forEach { rowSpeeds ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        rowSpeeds.forEach { speed ->
-                            FilterChip(
-                                selected = selectedSpeed == speed,
-                                onClick = { onSelectSpeed(speed) },
-                                label = {
-                                    Text(
-                                        text = speedLabel(speed),
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = IdlixRed,
-                                    selectedLabelColor = Color.White,
-                                    containerColor = Color.White.copy(alpha = 0.08f),
-                                    labelColor = TextMuted
-                                ),
-                                modifier = Modifier.weight(1f)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    FilterChip(
+                        selected = !isZoom,
+                        onClick = { onSelectAspect(false) },
+                        label = {
+                            Text(
+                                text = "Fit · Full picture",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
                             )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = IdlixRed,
+                            selectedLabelColor = Color.White,
+                            containerColor = Color.White.copy(alpha = 0.08f),
+                            labelColor = TextMuted
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                    FilterChip(
+                        selected = isZoom,
+                        onClick = { onSelectAspect(true) },
+                        label = {
+                            Text(
+                                text = "Zoom · Fill screen",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = IdlixRed,
+                            selectedLabelColor = Color.White,
+                            containerColor = Color.White.copy(alpha = 0.08f),
+                            labelColor = TextMuted
+                        ),
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+
+                HorizontalDivider(
+                    modifier = Modifier.padding(vertical = dividerPad),
+                    color = Color.White.copy(alpha = 0.1f)
+                )
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Speed,
+                        contentDescription = null,
+                        tint = IdlixRed,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Text(
+                        text = "Playback speed",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextWhite
+                    )
+                }
+
+                Spacer(modifier = Modifier.size(gapLarge))
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PlayerQualityPrefs.SPEED_OPTIONS.chunked(3).forEach { rowSpeeds ->
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            rowSpeeds.forEach { speed ->
+                                FilterChip(
+                                    selected = selectedSpeed == speed,
+                                    onClick = { onSelectSpeed(speed) },
+                                    label = {
+                                        Text(
+                                            text = speedLabel(speed),
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    },
+                                    colors = FilterChipDefaults.filterChipColors(
+                                        selectedContainerColor = IdlixRed,
+                                        selectedLabelColor = Color.White,
+                                        containerColor = Color.White.copy(alpha = 0.08f),
+                                        labelColor = TextMuted
+                                    ),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
                         }
                     }
                 }

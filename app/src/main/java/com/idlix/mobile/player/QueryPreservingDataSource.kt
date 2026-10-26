@@ -19,6 +19,8 @@ import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
 import androidx.media3.exoplayer.source.SingleSampleMediaSource
+import androidx.media3.common.text.Cue
+import androidx.media3.common.text.CueGroup
 import androidx.media3.exoplayer.text.TextOutput
 import androidx.media3.exoplayer.text.TextRenderer
 import com.idlix.data.model.SubtitleTrack
@@ -146,7 +148,20 @@ object MediaSourceHelper {
                 extensionRendererMode: Int,
                 out: ArrayList<Renderer>
             ) {
-                val renderer = TextRenderer(output, outputLooper)
+                // Normalize cue line so SubtitleView.bottomPaddingFraction applies:
+                // it only affects cues with line == DIMEN_UNSET. Horizontal
+                // position/alignment are preserved.
+                val normalizedOutput = TextOutput { cueGroup ->
+                    output.onCues(
+                        CueGroup(
+                            cueGroup.cues.map { cue ->
+                                cue.buildUpon().setLine(Cue.DIMEN_UNSET, cue.lineType).build()
+                            },
+                            cueGroup.presentationTimeUs
+                        )
+                    )
+                }
+                val renderer = TextRenderer(normalizedOutput, outputLooper)
                 renderer.experimentalSetLegacyDecodingEnabled(true)
                 out.add(renderer)
             }

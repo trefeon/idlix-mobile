@@ -83,6 +83,16 @@ class DetailViewModel(
     private var playbackJob: Job? = null
     private var resolveNextEpisodeJob: Job? = null
 
+    private var lastPrewarmedKey: String? = null
+
+    private fun maybePrewarmStream(contentType: String, contentId: String, contentTitle: String) {
+        if (contentId.isBlank()) return
+        val key = "$contentType:$contentId"
+        if (lastPrewarmedKey == key) return
+        lastPrewarmedKey = key
+        repository.prewarmStream(contentType, contentId, contentTitle)
+    }
+
     fun loadDetail(contentType: String, slug: String) {
         viewModelScope.launch {
             _uiState.value = _uiState.value.copy(
@@ -114,6 +124,12 @@ class DetailViewModel(
                             episodes = initialEpisodes,
                             selectedEpisode = firstEp
                         )
+                        val prewarmEp = firstEp
+                        if (prewarmEp != null) {
+                            maybePrewarmStream("episode", prewarmEp.id, series.title)
+                        } else {
+                            maybePrewarmStream("tv_series", slug, series.title)
+                        }
                     } else {
                         _uiState.value = _uiState.value.copy(
                             isLoadingDetail = false,
@@ -129,6 +145,7 @@ class DetailViewModel(
                             series = null,
                             episodes = emptyList()
                         )
+                        maybePrewarmStream("movie", movie.id, movie.title)
                     } else {
                         _uiState.value = _uiState.value.copy(
                             isLoadingDetail = false,
