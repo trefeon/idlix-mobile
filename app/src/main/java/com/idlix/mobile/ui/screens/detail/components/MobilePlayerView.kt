@@ -459,6 +459,7 @@ fun MobilePlayerView(
 
             // ExoPlayer AndroidView
             AndroidView(
+                modifier = Modifier.fillMaxSize(),
                 factory = { ctx ->
                     PlayerView(ctx).apply {
                         player = exoPlayer
