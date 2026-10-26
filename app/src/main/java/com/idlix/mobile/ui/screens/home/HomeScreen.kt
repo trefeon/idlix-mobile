@@ -80,7 +80,7 @@ fun HomeScreen(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "Unable to connect to server",
+                        text = "Couldn't load titles",
                         color = TextWhite,
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Bold
