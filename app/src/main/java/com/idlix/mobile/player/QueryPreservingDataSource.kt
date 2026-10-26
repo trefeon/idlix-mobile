@@ -80,6 +80,10 @@ object MediaSourceHelper {
     fun createHttpDataSourceFactory(tokenQuery: String): DataSource.Factory {
         val baseHttp = DefaultHttpDataSource.Factory()
             .setUserAgent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36")
+            // Fail fast on a stalled cell network instead of hanging the player:
+            // both segment connect and read time out after 5s.
+            .setConnectTimeoutMs(5000)
+            .setReadTimeoutMs(5000)
             .setDefaultRequestProperties(
                 mapOf(
                     "Referer" to IdlixDomainResolver.referer(),
@@ -100,7 +104,9 @@ object MediaSourceHelper {
             .setMimeType(MimeTypes.APPLICATION_M3U8)
             .build()
 
+        // Chunkless preparation starts playback without an extra playlist round-trip.
         val hlsSource = HlsMediaSource.Factory(httpDataSourceFactory)
+            .setAllowChunklessPreparation(true)
             .createMediaSource(mediaItem)
 
         if (sub == null) return hlsSource

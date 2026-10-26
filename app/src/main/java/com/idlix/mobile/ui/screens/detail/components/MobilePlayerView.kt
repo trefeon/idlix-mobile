@@ -61,6 +61,7 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
 import coil.compose.AsyncImage
@@ -69,6 +70,7 @@ import com.idlix.data.model.SubtitleTrack
 import com.idlix.mobile.R
 import com.idlix.mobile.player.MediaSourceHelper
 import com.idlix.mobile.player.PipController
+import com.idlix.mobile.player.PlayerQualityPrefs
 import com.idlix.mobile.ui.screens.detail.NextEpisodeInfo
 import com.idlix.mobile.ui.theme.BackgroundElevated
 import com.idlix.mobile.ui.theme.IdlixRed
@@ -92,6 +94,32 @@ fun letterboxBottomPadding(viewW: Float, viewH: Float, videoW: Float, videoH: Fl
     val barFraction = ((viewH - displayedH) / 2f / viewH).coerceAtLeast(0f)
     if (barFraction <= 0f) return 0.12f
     return (barFraction + 0.06f).coerceIn(0.12f, 0.50f)
+}
+
+/**
+ * Applies the effective quality tier to a live player without recreating it.
+ * Auto clears size constraints and lifts the bitrate cap; capped tiers pin
+ * max resolution + bitrate so the adaptive track selector stays under them.
+ */
+@OptIn(UnstableApi::class)
+fun applyPlayerQuality(player: ExoPlayer, effective: String) {
+    val current = player.trackSelectionParameters
+    val updated = current.buildUpon()
+    when (effective) {
+        PlayerQualityPrefs.QUALITY_1080 -> updated
+            .setMaxVideoSize(1920, 1080)
+            .setMaxVideoBitrate(PlayerQualityPrefs.BITRATE_1080)
+        PlayerQualityPrefs.QUALITY_720 -> updated
+            .setMaxVideoSize(1280, 720)
+            .setMaxVideoBitrate(PlayerQualityPrefs.BITRATE_720)
+        PlayerQualityPrefs.QUALITY_480 -> updated
+            .setMaxVideoSize(854, 480)
+            .setMaxVideoBitrate(PlayerQualityPrefs.BITRATE_480)
+        else -> updated
+            .clearVideoSizeConstraints()
+            .setMaxVideoBitrate(Int.MAX_VALUE)
+    }
+    player.trackSelectionParameters = updated.build()
 }
 
 @OptIn(UnstableApi::class)
@@ -134,14 +162,36 @@ fun MobilePlayerView(
     var volumeIndicator by remember { mutableStateOf<Float?>(null) }
     var doubleTapSeekFeedback by remember { mutableStateOf<Int?>(null) }
 
+    // Quality / speed / lock state (persisted in player prefs; default Auto / 1x)
+    var requestedQuality by remember { mutableStateOf(PlayerQualityPrefs.getQuality(context)) }
+    var playbackSpeed by remember { mutableStateOf(PlayerQualityPrefs.getSpeed(context)) }
+    var isDataSaver by remember { mutableStateOf(PlayerQualityPrefs.isDataSaver(context)) }
+    var isLocked by remember { mutableStateOf(false) }
+    var showQualitySheet by remember { mutableStateOf(false) }
+    val effectiveQuality = PlayerQualityPrefs.effectiveQuality(requestedQuality, isDataSaver)
+
+    // Pick up Data-Saver toggles from Settings while the player is alive.
+    DisposableEffect(context) {
+        val sp = context.applicationContext.getSharedPreferences(
+            "idlix_mobile_player", Context.MODE_PRIVATE
+        )
+        val listener = android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
+            requestedQuality = PlayerQualityPrefs.getQuality(context)
+            playbackSpeed = PlayerQualityPrefs.getSpeed(context)
+            isDataSaver = PlayerQualityPrefs.isDataSaver(context)
+        }
+        sp.registerOnSharedPreferenceChangeListener(listener)
+        onDispose { sp.unregisterOnSharedPreferenceChangeListener(listener) }
+    }
     var userInteractionCount by remember { mutableIntStateOf(0) }
     var activePlayer by remember { mutableStateOf<ExoPlayer?>(null) }
 
     val audioManager = remember { context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager }
 
-    // Auto-hide controls after 5 seconds of inactivity
-    LaunchedEffect(showControls, isPlaying, userInteractionCount) {
-        if (showControls && isPlaying) {
+    // Auto-hide controls after 5 seconds of inactivity.
+    // Lock suppresses auto-hide: locked chrome is already minimal (unlock affordance only).
+    LaunchedEffect(showControls, isPlaying, userInteractionCount, isLocked) {
+        if (showControls && isPlaying && !isLocked) {
             delay(5000)
             showControls = false
         }
@@ -251,13 +301,20 @@ fun MobilePlayerView(
 
             val exoPlayer = remember(context, resolvedStream.hlsMasterUrl) {
                 val renderersFactory = MediaSourceHelper.createRenderersFactory(context)
+                // P0 streaming profile: lean buffers for faster start on mobile networks.
                 val loadControl = DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(15000, 50000, 2500, 5000)
+                    .setBufferDurationsMs(10000, 30000, 1500, 3000)
                     .setPrioritizeTimeOverSizeThresholds(true)
+                    .build()
+                // Start the adaptive track selector at a mid-tier estimate instead of
+                // the bundled default so the first segments are watchable on cell.
+                val bandwidthMeter = DefaultBandwidthMeter.Builder(context)
+                    .setInitialBitrateEstimate(1_500_000L)
                     .build()
 
                 ExoPlayer.Builder(context, renderersFactory)
                     .setLoadControl(loadControl)
+                    .setBandwidthMeter(bandwidthMeter)
                     .build().apply {
                         val activeSub = if (isSubtitleEnabled) selectedSubtitle else null
                         val mediaSource = MediaSourceHelper.buildMediaSource(
@@ -273,6 +330,15 @@ fun MobilePlayerView(
                             .setSelectUndeterminedTextLanguage(true)
                             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !isSubtitleEnabled)
                             .build()
+                        // Data-Saver / saved tier applies from the first segment.
+                        applyPlayerQuality(
+                            this,
+                            PlayerQualityPrefs.effectiveQuality(
+                                PlayerQualityPrefs.getQuality(context),
+                                PlayerQualityPrefs.isDataSaver(context)
+                            )
+                        )
+                        setPlaybackSpeed(PlayerQualityPrefs.getSpeed(context))
 
                         prepare()
                         if (initialPositionMs > 0L) {
@@ -280,6 +346,18 @@ fun MobilePlayerView(
                         }
                         playWhenReady = true
                     }
+            }
+
+            // Quality / Data-Saver / speed updates without recreating ExoPlayer.
+            LaunchedEffect(effectiveQuality) {
+                try {
+                    applyPlayerQuality(exoPlayer, effectiveQuality)
+                } catch (_: Exception) {}
+            }
+            LaunchedEffect(playbackSpeed) {
+                try {
+                    exoPlayer.setPlaybackSpeed(playbackSpeed)
+                } catch (_: Exception) {}
             }
 
             // Subtitle track updates without recreating ExoPlayer instance
@@ -403,10 +481,37 @@ fun MobilePlayerView(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Touch Gestures Layer (Single tap, Double tap seek, Vertical Drag for Brightness & Volume)
+            // Gesture layer + overlay. Lock hides the gesture layer entirely;
+            // the overlay renders an unlock affordance instead.
             if (!isInPipMode) {
+                if (!isLocked) {
                 var dragStartX by remember { mutableFloatStateOf(0f) }
                 var hideHudJob by remember { mutableStateOf<Job?>(null) }
+                // Volume-drag quantization: accumulate travel, one step per 48px.
+                var volumeAccumPx by remember { mutableFloatStateOf(0f) }
+                // Brightness smoothing: accumulate deltas, flush at most every ~100ms.
+                var brightPending by remember { mutableFloatStateOf(0f) }
+                var lastBrightApplyMs by remember { mutableLongStateOf(0L) }
+
+                fun pokeHud() {
+                    hideHudJob?.cancel()
+                    hideHudJob = scope.launch {
+                        delay(1500)
+                        volumeIndicator = null
+                        brightnessIndicator = null
+                    }
+                }
+                fun applyBrightness(delta: Float) {
+                    if (delta == 0f) return
+                    val activity = context.findActivity()
+                    val window = activity?.window ?: return
+                    val lp = window.attributes
+                    val current = if (lp.screenBrightness < 0) 0.5f else lp.screenBrightness
+                    val updated = (current + delta).coerceIn(0.01f, 1f)
+                    lp.screenBrightness = updated
+                    window.attributes = lp
+                    brightnessIndicator = updated
+                }
 
                 Box(
                     modifier = Modifier
@@ -435,45 +540,52 @@ fun MobilePlayerView(
                             detectVerticalDragGestures(
                                 onDragStart = { offset ->
                                     dragStartX = offset.x
+                                    volumeAccumPx = 0f
+                                    brightPending = 0f
                                     userInteractionCount++
+                                },
+                                onDragEnd = {
+                                    // Flush any throttled brightness remainder.
+                                    if (brightPending != 0f) {
+                                        applyBrightness(brightPending)
+                                        brightPending = 0f
+                                        lastBrightApplyMs = android.os.SystemClock.uptimeMillis()
+                                    }
+                                    pokeHud()
                                 },
                                 onVerticalDrag = { change, dragAmount ->
                                     change.consume()
                                     val isRight = dragStartX >= size.width / 2
 
                                     if (isRight && audioManager != null) {
-                                        // Adjust Volume (Right)
-                                        val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                                        val currentVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                                        val deltaStep = if (dragAmount < 0) 1 else -1
-                                        val newVol = (currentVol + deltaStep).coerceIn(0, maxVol)
-                                        audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
-                                        volumeIndicator = newVol.toFloat() / maxVol.toFloat()
+                                        // Quantized volume: one step per 48px of travel.
+                                        volumeAccumPx += -dragAmount
+                                        val steps = (volumeAccumPx / 48f).toInt()
+                                        if (steps != 0) {
+                                            val maxVol = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                                            val curVol = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
+                                            val newVol = (curVol + steps).coerceIn(0, maxVol)
+                                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, newVol, 0)
+                                            volumeIndicator = newVol.toFloat() / maxVol.toFloat()
+                                            volumeAccumPx -= steps * 48f
+                                        }
                                     } else {
-                                        // Adjust Brightness (Left)
-                                        val activity = context.findActivity()
-                                        val window = activity?.window
-                                        if (window != null) {
-                                            val lp = window.attributes
-                                            val currentBright = if (lp.screenBrightness < 0) 0.5f else lp.screenBrightness
-                                            val delta = -dragAmount / 350f
-                                            val newBright = (currentBright + delta).coerceIn(0.01f, 1f)
-                                            lp.screenBrightness = newBright
-                                            window.attributes = lp
-                                            brightnessIndicator = newBright
+                                        // Throttled brightness: accumulate, apply every ~100ms.
+                                        brightPending += -dragAmount / 350f
+                                        val now = android.os.SystemClock.uptimeMillis()
+                                        if (now - lastBrightApplyMs >= 100L) {
+                                            applyBrightness(brightPending)
+                                            brightPending = 0f
+                                            lastBrightApplyMs = now
                                         }
                                     }
 
-                                    hideHudJob?.cancel()
-                                    hideHudJob = scope.launch {
-                                        delay(1500)
-                                        volumeIndicator = null
-                                        brightnessIndicator = null
-                                    }
+                                    pokeHud()
                                 }
                             )
                         }
                 )
+                }
 
                 // Overlay Controls & HUDs
                 MobilePlayerOverlay(
@@ -512,7 +624,38 @@ fun MobilePlayerView(
                     onToggleControls = {
                         showControls = !showControls
                         userInteractionCount++
-                    }
+                    },
+                    isLocked = isLocked,
+                    onToggleLock = {
+                        isLocked = !isLocked
+                        userInteractionCount++
+                    },
+                    qualityLabel = PlayerQualityPrefs.labelFor(effectiveQuality),
+                    onOpenQualityPicker = {
+                        showQualitySheet = true
+                        userInteractionCount++
+                    },
+                    playbackSpeed = playbackSpeed
+                )
+
+                // Quality + speed picker (Auto/1080p/720p/480p + 0.5x-2x)
+                QualityPickerBottomSheet(
+                    isVisible = showQualitySheet,
+                    selectedQuality = requestedQuality,
+                    effectiveQuality = effectiveQuality,
+                    isDataSaver = isDataSaver,
+                    selectedSpeed = playbackSpeed,
+                    onSelectQuality = { quality ->
+                        requestedQuality = quality
+                        PlayerQualityPrefs.setQuality(context, quality)
+                        userInteractionCount++
+                    },
+                    onSelectSpeed = { speed ->
+                        playbackSpeed = speed
+                        PlayerQualityPrefs.setSpeed(context, speed)
+                        userInteractionCount++
+                    },
+                    onDismiss = { showQualitySheet = false }
                 )
             }
         } else {

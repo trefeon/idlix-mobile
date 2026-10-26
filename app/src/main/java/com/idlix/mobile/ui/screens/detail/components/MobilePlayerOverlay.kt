@@ -30,6 +30,8 @@ import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.BrightnessMedium
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ClosedCaption
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.LockOpen
 import androidx.compose.material.icons.filled.Forward10
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
@@ -52,6 +54,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.BiasAlignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
@@ -92,6 +95,11 @@ fun MobilePlayerOverlay(
     onDismissNextEpisode: () -> Unit,
     onUserInteraction: () -> Unit,
     onToggleControls: () -> Unit,
+    isLocked: Boolean = false,
+    onToggleLock: () -> Unit = {},
+    qualityLabel: String = "Auto",
+    onOpenQualityPicker: () -> Unit = {},
+    playbackSpeed: Float = 1f,
      modifier: Modifier = Modifier
 ) {
     var isScrubbing by remember { mutableStateOf(false) }
@@ -103,6 +111,34 @@ fun MobilePlayerOverlay(
     val showNextEpisodeCard = isNearEnd && nextEpisode != null && !isNextEpisodeDismissed
 
     Box(modifier = modifier.fillMaxSize()) {
+        if (isLocked) {
+            // Locked chrome: unlock affordance only; tap anywhere unlocks.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = onToggleLock
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Box(
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.7f))
+                        .padding(16.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.LockOpen,
+                        contentDescription = "Unlock controls",
+                        tint = Color.White,
+                        modifier = Modifier.size(28.dp)
+                    )
+                }
+            }
+        } else {
         // Overlay Controls (Top bar, Center controls, Bottom bar)
         AnimatedVisibility(
             visible = showControls,
@@ -175,6 +211,23 @@ fun MobilePlayerOverlay(
                         }
                     }
 
+                    // Quality entry next to CC: effective tier chip opens the picker.
+                    Box(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(6.dp))
+                            .background(Color.White.copy(alpha = 0.15f))
+                            .clickable(onClick = onOpenQualityPicker)
+                            .padding(horizontal = 8.dp, vertical = 7.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "$qualityLabel ▾",
+                            color = TextWhite,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
                     // CC Subtitle button
                     IconButton(
                         onClick = onOpenSubtitlePicker,
@@ -184,6 +237,18 @@ fun MobilePlayerOverlay(
                             imageVector = Icons.Default.ClosedCaption,
                             contentDescription = stringResource(R.string.subtitles),
                             tint = if (isSubtitleEnabled) IdlixRed else Color.White.copy(alpha = 0.7f)
+                        )
+                    }
+
+                    // Lock mode toggle
+                    IconButton(
+                        onClick = onToggleLock,
+                        modifier = Modifier.size(40.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Lock,
+                            contentDescription = "Lock controls",
+                            tint = Color.White.copy(alpha = 0.7f)
                         )
                     }
                 }
@@ -258,6 +323,27 @@ fun MobilePlayerOverlay(
                             }
                         )
                 ) {
+                    // Scrub time-tooltip: follows the thumb while dragging.
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(24.dp)
+                    ) {
+                        if (isScrubbing && durationMs > 0L) {
+                            val fraction = (effectivePos.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+                            Text(
+                                text = formatDuration(effectivePos),
+                                color = TextWhite,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .align(BiasAlignment(horizontalBias = -1f + 2f * fraction, verticalBias = 0f))
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color.Black.copy(alpha = 0.8f))
+                                    .padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
                     Slider(
                         value = effectivePos.toFloat(),
                         onValueChange = { newPos ->
@@ -293,21 +379,42 @@ fun MobilePlayerOverlay(
                             fontWeight = FontWeight.Medium
                         )
 
-                        // Bottom-right Fullscreen Expand/Exit button
-                        IconButton(
-                            onClick = onToggleFullscreen,
-                            modifier = Modifier.size(36.dp)
+                        // Speed chip + Fullscreen button (bottom-right cluster)
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Icon(
-                                imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
-                                contentDescription = if (isFullscreen) stringResource(R.string.exit_fullscreen) else stringResource(R.string.fullscreen),
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
+                            Box(
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(Color.White.copy(alpha = 0.15f))
+                                    .clickable(onClick = onOpenQualityPicker)
+                                    .padding(horizontal = 8.dp, vertical = 7.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = speedLabel(playbackSpeed),
+                                    color = TextWhite,
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                            }
+                            IconButton(
+                                onClick = onToggleFullscreen,
+                                modifier = Modifier.size(36.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isFullscreen) Icons.Default.FullscreenExit else Icons.Default.Fullscreen,
+                                    contentDescription = if (isFullscreen) stringResource(R.string.exit_fullscreen) else stringResource(R.string.fullscreen),
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }
             }
+        }
         }
 
         // HUD: Brightness Indicator (Left)

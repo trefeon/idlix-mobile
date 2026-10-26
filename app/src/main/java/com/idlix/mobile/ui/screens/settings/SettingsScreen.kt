@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -63,6 +64,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val isDataSaver by viewModel.isDataSaver.collectAsState()
     val updateState by viewModel.updateState.collectAsState()
     var isSubdlKeyVisible by remember { mutableStateOf(false) }
 
@@ -182,6 +184,37 @@ fun SettingsScreen(
                 }
             }
 
+            // Playback: Data Saver (user-safe section)
+            Card(
+                colors = CardDefaults.cardColors(containerColor = SurfaceDark),
+                shape = RoundedCornerShape(12.dp)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Data Saver",
+                            color = TextWhite,
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "Cap streaming quality at 720p to save mobile data.",
+                            color = TextMuted,
+                            fontSize = 12.sp
+                        )
+                    }
+                    Switch(
+                        checked = isDataSaver,
+                        onCheckedChange = { viewModel.setDataSaver(it) }
+                    )
+                }
+            }
             // Storage & Cache
             Card(
                 colors = CardDefaults.cardColors(containerColor = SurfaceDark),

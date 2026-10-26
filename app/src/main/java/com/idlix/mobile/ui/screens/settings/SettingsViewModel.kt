@@ -13,6 +13,7 @@ import com.idlix.mobile.update.UpdateState
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.idlix.data.repository.SubdlRepository
+import com.idlix.mobile.player.PlayerQualityPrefs
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -44,6 +45,17 @@ class SettingsViewModel(
 
     fun saveSubdlKey() {
         SubdlRepository.setApiKey(_uiState.value.subdlKey)
+    }
+
+    // Playback: Data Saver caps streaming quality at 720p (user-safe section).
+    private val _isDataSaver = MutableStateFlow(
+        PlayerQualityPrefs.isDataSaver(getApplication())
+    )
+    val isDataSaver: StateFlow<Boolean> = _isDataSaver.asStateFlow()
+
+    fun setDataSaver(enabled: Boolean) {
+        PlayerQualityPrefs.setDataSaver(getApplication(), enabled)
+        _isDataSaver.value = enabled
     }
 
     fun testSubdl() {
