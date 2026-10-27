@@ -6,13 +6,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -23,14 +21,16 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.idlix.mobile.R
 import com.idlix.mobile.ui.theme.IdlixRed
-import com.idlix.mobile.ui.theme.SurfaceDark
-import com.idlix.mobile.ui.theme.TextMuted
 import com.idlix.mobile.ui.theme.TextWhite
 import com.idlix.mobile.update.UpdateState
 
 /**
- * Self-update row for the settings screen. Pure view: every transition is
- * driven by [state] from the owning ViewModel, clicks delegate outward.
+ * Self-update row for the settings screen, row treatment (no card wrapper).
+ * Pure view: every transition is driven by [state] from the owning
+ * ViewModel, clicks delegate outward.
+ *
+ * Button rank: only Download/Install are filled red. Check/Retry are
+ * outlined; progress states show no button.
  */
 @Composable
 fun UpdateSettingsRow(
@@ -40,153 +40,158 @@ fun UpdateSettingsRow(
     onInstallClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = SurfaceDark),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(
-                text = stringResource(R.string.update_title),
-                fontSize = 16.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextWhite
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-
-            when (state) {
-                is UpdateState.Idle -> {
-                    UpdateButton(
+    when (state) {
+        is UpdateState.Idle -> {
+            SettingsRow(
+                title = stringResource(R.string.update_title),
+                onClick = onCheckClick,
+                modifier = modifier,
+                trailing = {
+                    OutlinedUpdateButton(
                         label = stringResource(R.string.update_check),
                         onClick = onCheckClick
                     )
                 }
-                is UpdateState.Checking -> {
+            )
+        }
+        is UpdateState.Checking -> {
+            SettingsRow(
+                title = stringResource(R.string.update_title),
+                supporting = stringResource(R.string.update_checking),
+                onClick = null,
+                modifier = modifier,
+                trailing = {
                     CircularProgressIndicator(color = IdlixRed)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(R.string.update_checking),
-                        fontSize = 14.sp,
-                        color = TextMuted
-                    )
                 }
-                is UpdateState.UpToDate -> {
-                    Text(
-                        text = stringResource(
-                            R.string.update_up_to_date,
-                            state.currentVersion
-                        ),
-                        fontSize = 14.sp,
-                        color = TextMuted
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    UpdateButton(
+            )
+        }
+        is UpdateState.UpToDate -> {
+            SettingsRow(
+                title = stringResource(R.string.update_title),
+                supporting = stringResource(
+                    R.string.update_up_to_date,
+                    state.currentVersion
+                ),
+                onClick = onCheckClick,
+                modifier = modifier,
+                trailing = {
+                    OutlinedUpdateButton(
                         label = stringResource(R.string.update_check),
-                        onClick = onCheckClick,
-                        primary = false
+                        onClick = onCheckClick
                     )
                 }
-                is UpdateState.Available -> {
-                    Text(
-                        text = stringResource(
-                            R.string.update_available_title,
-                            state.version
-                        ),
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = TextWhite
-                    )
+            )
+        }
+        is UpdateState.Available -> {
+            SettingsRow(
+                title = stringResource(
+                    R.string.update_available_title,
+                    state.version
+                ),
+                supporting = buildString {
                     if (state.notes.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = state.notes.trim().take(600),
-                            fontSize = 13.sp,
-                            color = TextMuted,
-                            maxLines = 4,
-                            overflow = TextOverflow.Ellipsis
-                        )
+                        append(state.notes.trim().take(600))
+                        append(" · ")
                     }
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        text = stringResource(
-                            R.string.update_size,
-                            formatSize(state.sizeBytes)
-                        ),
-                        fontSize = 13.sp,
-                        color = TextMuted
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    UpdateButton(
+                    append("Size: ${formatSize(state.sizeBytes)}")
+                },
+                onClick = onDownloadClick,
+                modifier = modifier,
+                trailing = {
+                    FilledUpdateButton(
                         label = stringResource(R.string.update_download),
                         onClick = onDownloadClick
                     )
                 }
-                is UpdateState.Downloading -> {
-                    val percent = (state.progress.coerceIn(0f, 1f) * 100).toInt()
-                    Text(
-                        text = stringResource(R.string.update_downloading, percent),
-                        fontSize = 14.sp,
-                        color = TextWhite
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { state.progress.coerceIn(0f, 1f) },
-                        modifier = Modifier.fillMaxWidth(),
-                        color = IdlixRed
-                    )
-                }
-                is UpdateState.Downloaded -> {
-                    Text(
-                        text = stringResource(R.string.update_downloaded),
-                        fontSize = 14.sp,
-                        color = TextWhite
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    UpdateButton(
+            )
+        }
+        is UpdateState.Downloading -> {
+            val percent = (state.progress.coerceIn(0f, 1f) * 100).toInt()
+            Column(
+                modifier = modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 72.dp)
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.update_downloading, percent),
+                    color = TextWhite,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LinearProgressIndicator(
+                    progress = { state.progress.coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth(),
+                    color = IdlixRed
+                )
+            }
+        }
+        is UpdateState.Downloaded -> {
+            SettingsRow(
+                title = stringResource(R.string.update_downloaded),
+                onClick = onInstallClick,
+                modifier = modifier,
+                trailing = {
+                    FilledUpdateButton(
                         label = stringResource(R.string.update_install),
                         onClick = onInstallClick
                     )
                 }
-                is UpdateState.Failed -> {
-                    Text(
-                        text = stringResource(R.string.update_failed, state.reason),
-                        fontSize = 14.sp,
-                        color = TextMuted,
-                        maxLines = 3,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    UpdateButton(
+            )
+        }
+        is UpdateState.Failed -> {
+            SettingsRow(
+                title = stringResource(R.string.update_title),
+                supporting = stringResource(R.string.update_failed, state.reason),
+                onClick = onCheckClick,
+                modifier = modifier,
+                trailing = {
+                    OutlinedUpdateButton(
                         label = stringResource(R.string.update_retry),
                         onClick = onCheckClick
                     )
                 }
-            }
+            )
         }
     }
 }
 
 @Composable
-private fun UpdateButton(
+private fun FilledUpdateButton(
     label: String,
-    onClick: () -> Unit,
-    primary: Boolean = true
+    onClick: () -> Unit
 ) {
-    if (primary) {
-        Button(
-            onClick = onClick,
-            modifier = Modifier.heightIn(min = 48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = IdlixRed)
-        ) {
-            Text(text = label)
-        }
-    } else {
-        androidx.compose.material3.OutlinedButton(
-            onClick = onClick,
-            modifier = Modifier.heightIn(min = 48.dp)
-        ) {
-            Text(text = label, color = TextWhite)
-        }
+    Button(
+        onClick = onClick,
+        modifier = Modifier.heightIn(min = 48.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = IdlixRed)
+    ) {
+        Text(
+            text = label,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
+    }
+}
+
+@Composable
+private fun OutlinedUpdateButton(
+    label: String,
+    onClick: () -> Unit
+) {
+    OutlinedButton(
+        onClick = onClick,
+        modifier = Modifier.heightIn(min = 48.dp)
+    ) {
+        Text(
+            text = label,
+            color = TextWhite,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 

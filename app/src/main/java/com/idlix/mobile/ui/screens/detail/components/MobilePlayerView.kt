@@ -67,6 +67,8 @@ import androidx.media3.common.VideoSize
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.trackselection.AdaptiveTrackSelection
+import androidx.media3.exoplayer.trackselection.DefaultTrackSelector
 import androidx.media3.exoplayer.upstream.DefaultBandwidthMeter
 import androidx.media3.ui.CaptionStyleCompat
 import androidx.media3.ui.PlayerView
@@ -75,6 +77,7 @@ import com.idlix.data.model.ResolvedPlayback
 import com.idlix.data.model.SubtitleTrack
 import com.idlix.mobile.R
 import com.idlix.mobile.player.MediaSourceHelper
+import com.idlix.mobile.player.AudioStabilizer
 import com.idlix.mobile.player.PipController
 import com.idlix.mobile.player.PlayerQualityPrefs
 import com.idlix.mobile.ui.screens.detail.NextEpisodeInfo
@@ -93,15 +96,9 @@ tailrec fun Context.findActivity(): Activity? = when (this) {
     else -> null
 }
 
-fun letterboxBottomPadding(viewW: Float, viewH: Float, videoW: Float, videoH: Float): Float {
-    if (viewW <= 0f || viewH <= 0f || videoW <= 0f || videoH <= 0f) return 0.08f
-    val videoAspect = videoW / videoH
-    if (videoAspect <= 0f) return 0.08f
-    val displayedH = viewW / videoAspect
-    val barFraction = ((viewH - displayedH) / 2f / viewH).coerceAtLeast(0f)
-    if (barFraction <= 0f) return 0.08f
-    return (barFraction + 0.04f).coerceIn(0.08f, 0.50f)
-}
+// Subtitles sit at a fixed fraction of the SCREEN height, independent of the
+// video aspect: identical placement for 16:9, 21:9, 4:3 on any panel.
+private const val SubtitleBottomFraction = 0.08f
 
 /**
  * Player-consumable audio rendition surfaced from the HLS master (ExoPlayer
@@ -141,8 +138,8 @@ fun applyPlayerQuality(player: ExoPlayer, effective: String) {
 
 /**
  * Applies the aspect live on an existing PlayerView (no ExoPlayer rebuild).
- * Zoom-aware subtitle rule lives with the caller: Zoom has no letterbox
- * bars, so the subtitle bottom padding falls back to the 0.08 default.
+ * Subtitles are aspect-independent (fixed screen-fraction padding), so Zoom
+ * needs no subtitle adjustment.
  */
 fun applyVideoZoom(playerView: PlayerView, zoom: Boolean) {
     playerView.resizeMode =
@@ -201,7 +198,7 @@ fun MobilePlayerView(
     var playbackSpeed by remember { mutableStateOf(PlayerQualityPrefs.getSpeed(context)) }
     var isDataSaver by remember { mutableStateOf(PlayerQualityPrefs.isDataSaver(context)) }
     // Zoom-fill aspect holder as a stable State object so the PlayerView
-    // factory's padding listeners always read the live value.
+    // update block always reads the live value.
     val zoomState = remember { mutableStateOf(PlayerQualityPrefs.isVideoZoom(context)) }
     var isZoom by zoomState
     // Transient pinch-toggle feedback chip ("Zoom · Fill" / "Fit · Full picture").
@@ -210,6 +207,9 @@ fun MobilePlayerView(
     var qualitySheetStartAtSpeed by remember { mutableStateOf(false) }
     val effectiveQuality = PlayerQualityPrefs.effectiveQuality(requestedQuality, isDataSaver)
 
+    // Loudness normalizer ("Audio stabilizer"): session-bound INSERT effect.
+    val audioStabilizer = remember { AudioStabilizer() }
+    var stabilizerEnabled by remember { mutableStateOf(PlayerQualityPrefs.isAudioStabilizer(context)) }
     // Pick up Data-Saver toggles from Settings while the player is alive.
     DisposableEffect(context) {
         val sp = context.applicationContext.getSharedPreferences(
@@ -220,6 +220,7 @@ fun MobilePlayerView(
             playbackSpeed = PlayerQualityPrefs.getSpeed(context)
             isDataSaver = PlayerQualityPrefs.isDataSaver(context)
             isZoom = PlayerQualityPrefs.isVideoZoom(context)
+            stabilizerEnabled = PlayerQualityPrefs.isAudioStabilizer(context)
         }
         sp.registerOnSharedPreferenceChangeListener(listener)
         onDispose { sp.unregisterOnSharedPreferenceChangeListener(listener) }
@@ -351,7 +352,7 @@ fun MobilePlayerView(
                 val renderersFactory = MediaSourceHelper.createRenderersFactory(context)
                 // P0 streaming profile: lean buffers for faster start on mobile networks.
                 val loadControl = DefaultLoadControl.Builder()
-                    .setBufferDurationsMs(10000, 30000, 1500, 3000)
+                    .setBufferDurationsMs(10000, 30000, 1000, 3000)
                     .setPrioritizeTimeOverSizeThresholds(true)
                     .build()
                 // Start the adaptive track selector at a mid-tier estimate instead of
@@ -360,9 +361,16 @@ fun MobilePlayerView(
                     .setInitialBitrateEstimate(1_500_000L)
                     .build()
 
+                // ABR damping for lean 10s/30s cell buffers: slower to rise,
+                // quicker to protect — stops quality yo-yo on fluctuating links.
+                val trackSelector = DefaultTrackSelector(
+                    context,
+                    AdaptiveTrackSelection.Factory(15000, 20000, 20000, 0.6f)
+                )
                 ExoPlayer.Builder(context, renderersFactory)
                     .setLoadControl(loadControl)
                     .setBandwidthMeter(bandwidthMeter)
+                    .setTrackSelector(trackSelector)
                     .build().apply {
                         val activeSub = if (isSubtitleEnabled) selectedSubtitle else null
                         val mediaSource = MediaSourceHelper.buildMediaSource(
@@ -378,6 +386,9 @@ fun MobilePlayerView(
                             .setSelectUndeterminedTextLanguage(true)
                             .setPreferredAudioLanguage(PlayerQualityPrefs.getPreferredAudioLanguage(context))
                             .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, !isSubtitleEnabled)
+                            // Floor kills the sub-SD mush rung; skipped under
+                            // Data Saver (cap owns the ceiling there anyway).
+                            .apply { if (!PlayerQualityPrefs.isDataSaver(context)) setMinVideoBitrate(400_000) }
                             .build()
                         // Data-Saver / saved tier applies from the first segment.
                         applyPlayerQuality(
@@ -388,6 +399,9 @@ fun MobilePlayerView(
                             )
                         )
                         setPlaybackSpeed(PlayerQualityPrefs.getSpeed(context))
+                        // Loudness normalizer: registers the session listener now
+                        // so the effect binds as soon as the audio session appears.
+                        audioStabilizer.attach(this, PlayerQualityPrefs.isAudioStabilizer(context))
 
                         prepare()
                         if (initialPositionMs > 0L) {
@@ -440,6 +454,12 @@ fun MobilePlayerView(
 
             LaunchedEffect(exoPlayer) {
                 activePlayer = exoPlayer
+            }
+            // Stabilizer toggle applies live (Settings flip while playing).
+            LaunchedEffect(stabilizerEnabled) {
+                try {
+                    audioStabilizer.setEnabled(stabilizerEnabled)
+                } catch (_: Exception) {}
             }
             // Fan audio renditions out to the subtitle sheet (owned by DetailScreen).
             LaunchedEffect(audioOptions, selectedAudioLang) {
@@ -560,6 +580,7 @@ fun MobilePlayerView(
                     PipController.isPlaybackActive = false
                     PipController.onPauseRequested = null
                     activePlayer = null
+                    audioStabilizer.detach(exoPlayer)
                     exoPlayer.release()
                 }
             }
@@ -587,30 +608,7 @@ fun MobilePlayerView(
                                 )
                             )
                             subs.setUserDefaultTextSize()
-                            subs.setBottomPaddingFraction(0.08f)
-                            fun refreshPadding(videoSize: VideoSize = exoPlayer.videoSize) {
-                                // Zoom fills the frame (no letterbox bars), so
-                                // subtitles fall back to the 0.08 default;
-                                // FIT keeps the letterbox-derived lift.
-                                subs.setBottomPaddingFraction(
-                                    if (zoomState.value) 0.08f
-                                    else letterboxBottomPadding(
-                                        width.toFloat(),
-                                        height.toFloat(),
-                                        videoSize.width.toFloat(),
-                                        videoSize.height.toFloat()
-                                    )
-                                )
-                            }
-                            val subtitleSizeListener = object : Player.Listener {
-                                override fun onVideoSizeChanged(videoSize: VideoSize) {
-                                    refreshPadding(videoSize)
-                                }
-                            }
-                            exoPlayer.addListener(subtitleSizeListener)
-                            // Stashed for onRelease so the listener is removed with the view.
-                            setTag(subtitleSizeListener)
-                            addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> refreshPadding() }
+                            subs.setBottomPaddingFraction(SubtitleBottomFraction)
                         }
                     }
                 },
@@ -619,20 +617,8 @@ fun MobilePlayerView(
                 update = { view ->
                     applyVideoZoom(view, isZoom)
                     refreshPipHint(view)
-                    view.subtitleView?.setBottomPaddingFraction(
-                        if (isZoom) 0.08f
-                        else letterboxBottomPadding(
-                            view.width.toFloat(),
-                            view.height.toFloat(),
-                            exoPlayer.videoSize.width.toFloat(),
-                            exoPlayer.videoSize.height.toFloat()
-                        )
-                    )
                 },
-                onRelease = { view ->
-                    try {
-                        (view.getTag() as? Player.Listener)?.let { exoPlayer.removeListener(it) }
-                    } catch (_: Exception) {}
+                onRelease = {
                     playerViewRef = null
                 },
             )

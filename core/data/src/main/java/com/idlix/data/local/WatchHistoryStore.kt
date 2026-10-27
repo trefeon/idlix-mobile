@@ -156,6 +156,11 @@ class WatchHistoryStore private constructor(context: Context) {
         currentList.removeAll { it.contentId == contentId }
         saveHistoryToPrefs(currentList)
     }
+
+    /**
+     * Re-inserts a previously removed item at the head (undo-delete), also
+     * restoring its per-id position/duration/timestamp keys.
+     */
     fun restoreItem(item: WatchHistoryItem) {
         prefs.edit()
             .putLong("${item.contentId}_pos", item.positionMs)

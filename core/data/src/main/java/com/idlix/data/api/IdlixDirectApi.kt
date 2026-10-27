@@ -102,11 +102,15 @@ internal fun decodeBase64Url(input: String): String? {
 }
 
 /**
- * Server-synchronized countdown: `min(unlockAt - serverNow + 500, 16000)` ms,
- * falling back to 15s when the clock pair is unusable. Pure, unit-tested.
+ * Server-synchronized countdown: `min(unlockAt - serverNow + 500, 16000)` ms.
+ * Already unlocked (`unlockAt <= serverNow`) claims immediately — the server
+ * enforces the gate, so no client wait is needed; the claim retry loop covers
+ * the race. Falls back to 15s only when the clock pair is unusable.
+ * Pure, unit-tested.
  */
 fun countdownDelayMs(serverNow: Long, unlockAt: Long): Long {
-    if (serverNow <= 0 || unlockAt <= serverNow) return 15_000L
+    if (serverNow <= 0) return 15_000L
+    if (unlockAt <= serverNow) return 0L
     return minOf(unlockAt - serverNow + 500L, 16_000L).coerceAtLeast(0L)
 }
 

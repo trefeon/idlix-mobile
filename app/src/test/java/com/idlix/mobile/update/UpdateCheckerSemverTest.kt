@@ -117,6 +117,9 @@ class UpdateCheckerSemverTest {
         // Both fail -> APK missing.
         assertEquals(null, UpdateChecker.resolveAssetSize(404, null, 404, null))
         assertEquals(null, UpdateChecker.resolveAssetSize(500, null, null, null))
+        // 302s never reach the matrix (the probe client follows redirects);
+        // a terminal 3xx still means missing.
+        assertEquals(null, UpdateChecker.resolveAssetSize(302, null, 302, null))
     }
 
     @Test

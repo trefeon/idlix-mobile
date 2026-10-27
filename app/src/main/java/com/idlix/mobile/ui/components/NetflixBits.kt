@@ -40,7 +40,6 @@ import com.idlix.data.model.MovieItem
 import com.idlix.mobile.R
 import com.idlix.mobile.ui.theme.AgeBadgeBorder
 import com.idlix.mobile.ui.theme.IdlixRed
-import com.idlix.mobile.ui.theme.MatchGreen
 import com.idlix.mobile.ui.theme.SurfaceVariantDark
 import com.idlix.mobile.ui.theme.TextMuted
 import com.idlix.mobile.ui.theme.TextWhite
@@ -97,7 +96,7 @@ fun NetflixSectionHeader(
 }
 
 /**
- * Compact Netflix metadata row: match % (green) • year • age badge • duration • HD.
+ * Compact Netflix metadata row: match % (white) • year • age badge • duration • HD.
  * Direction-aware Row so ID locale RTL mirrors automatically.
  */
 @Composable
@@ -121,7 +120,7 @@ fun NetflixMetadataRow(
         if (matchPercent != null) {
             Text(
                 text = stringResource(R.string.match_percent, matchPercent),
-                color = MatchGreen,
+                color = TextWhite,
                 fontSize = 13.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -156,7 +155,7 @@ fun NetflixMetadataRow(
         if (showHd) {
             Surface(
                 color = Color.White.copy(alpha = 0.12f),
-                shape = RoundedCornerShape(4.dp)
+                shape = RoundedCornerShape(3.dp)
             ) {
                 Text(
                     text = "HD",

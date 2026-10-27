@@ -601,7 +601,7 @@ private fun DetailInfoColumn(
         Button(
             onClick = onPlayClick,
             colors = ButtonDefaults.buttonColors(containerColor = IdlixRed),
-            shape = RoundedCornerShape(8.dp),
+            shape = RoundedCornerShape(6.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(48.dp)

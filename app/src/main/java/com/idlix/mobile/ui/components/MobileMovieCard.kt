@@ -82,7 +82,7 @@ fun MobileMovieCard(
                             .padding(4.dp)
                             .background(
                                 color = Color.Black.copy(alpha = 0.7f),
-                                shape = RoundedCornerShape(4.dp)
+                                shape = RoundedCornerShape(3.dp)
                             )
                             .padding(horizontal = 5.dp, vertical = 2.dp)
                     ) {

@@ -189,7 +189,7 @@ fun HeroBannerPager(
                             enabled = canBookmark || (onToggleBookmark == null && canOpen),
                             modifier = Modifier.heightIn(min = 48.dp),
                             colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White.copy(alpha = 0.18f),
+                                containerColor = Color.White.copy(alpha = 0.4f),
                                 contentColor = TextWhite
                             ),
                             shape = RoundedCornerShape(6.dp)

@@ -145,6 +145,8 @@
     <string name="settings_subdl_failed">Subtitle test failed: %1$s</string>
     <string name="settings_data_saver_title">Data Saver</string>
     <string name="settings_data_saver_desc">Cap streaming quality at 720p to save mobile data.</string>
+    <string name="settings_audio_stabilizer_title">Audio stabilizer</string>
+    <string name="settings_audio_stabilizer_desc">Evens out loud and quiet moments so dialogue stays clear without riding the volume.</string>
     <string name="settings_storage_title">Storage &amp; Cache</string>
     <string name="settings_storage_desc">Clear cached posters and thumbnails to free up storage.</string>
     <string name="settings_clear_cache">Clear Image Cache</string>

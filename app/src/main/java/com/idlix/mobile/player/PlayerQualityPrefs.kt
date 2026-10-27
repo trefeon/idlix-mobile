@@ -18,6 +18,7 @@ object PlayerQualityPrefs {
     private const val KEY_DATA_SAVER = "player_data_saver"
     private const val KEY_VIDEO_ZOOM = "player_video_zoom"
     private const val KEY_AUDIO_LANGUAGE = "player_audio_language"
+    private const val KEY_AUDIO_STABILIZER = "player_audio_stabilizer"
     const val QUALITY_AUTO = "auto"
     const val QUALITY_1080 = "1080p"
     const val QUALITY_720 = "720p"
@@ -122,5 +123,17 @@ object PlayerQualityPrefs {
         QUALITY_720 -> "720p"
         QUALITY_480 -> "480p"
         else -> "Auto"
+    }
+
+    /**
+     * Loudness normalizer ("Audio stabilizer") toggle. Default ON.
+     * Read at player creation (and live via the prefs listener while
+     * playing); the player binds the session effect only when this is true.
+     */
+    fun isAudioStabilizer(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_AUDIO_STABILIZER, true)
+
+    fun setAudioStabilizer(context: Context, enabled: Boolean) {
+        prefs(context).edit().putBoolean(KEY_AUDIO_STABILIZER, enabled).apply()
     }
 }

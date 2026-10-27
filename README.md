@@ -1,4 +1,4 @@
-# IDLIX for Android Mobile 📱
+# IDLIX for Android Mobile
 
 [![Release](https://img.shields.io/github/v/release/trefeon/idlix-mobile)](https://github.com/trefeon/idlix-mobile/releases)
 [![CI](https://github.com/trefeon/idlix-mobile/actions/workflows/android-ci.yml/badge.svg)](https://github.com/trefeon/idlix-mobile/actions/workflows/android-ci.yml)
@@ -10,32 +10,34 @@ A modern, **100% native Android streaming client** for movies and TV series from
 
 ---
 
-## ✨ Features
+## Features
 
 | Area | What you get |
 |---|---|
-| **Phone UI** | Hero billboard with Play / My List, Top-10 rail with oversized numerals, Continue Watching, genre swimlanes, bottom navigation |
-| **Tablet UI** | Same codebase, adaptive at 600/840dp breakpoints: wider grids, bigger hero, two-pane master-detail — no separate app |
-| **Player** | Inline-to-fullscreen dual mode, double-tap ±10s, vertical-drag brightness/volume, Picture-in-Picture, token-preserving HLS, aspect-aware subtitles (transparent background, outlined white text) |
-| **Subtitles** | Built-in IDLIX subtitles + SubDL search and download (bring your own free API key) |
-| **Library** | Local Continue Watching and history — fully offline, no account |
-| **Auto-update** | Checks GitHub releases, downloads and installs new versions in-app |
+| **Phone UI** | Hero billboard with Play / My List, Top-10 rail, Continue Watching, genre swimlanes, bottom navigation |
+| **Tablet UI** | Same codebase, adaptive at 600/840dp breakpoints: wider grids, bigger hero, two-pane master-detail |
+| **Player** | Portrait app with landscape-only fullscreen player, double-tap ±10s, swipe brightness/volume, Picture-in-Picture, token-preserving HLS |
+| **Subtitles** | Built-in IDLIX subtitles plus SubDL search from a settings dialog (bring your own free API key); screen-fraction placement identical on 16:9, 21:9, and 4:3 |
+| **Settings** | Material 3 grouped lists with a SubDL key dialog and a de-emphasized Clear Image Cache row; includes Data Saver and an audio stabilizer toggle |
+| **Playback start** | Already-unlocked streams claim instantly with no wait; damped ABR with lean buffers and a low first-frame bitrate estimate |
+| **Library** | Local Continue Watching and history with undo-delete, fully offline, no account |
+| **Auto-update** | Checks GitHub releases and installs new versions in-app; fixed checker follows download redirects and reports up-to-date without probing |
 
 **Catalog source:** the app resolves the live IDLIX mirror at runtime from the canonical `https://idlix.net/` (redirect-follow, allowlisted hosts, fail-closed). No self-hosted server, no VPS, nothing to deploy.
 
 ---
 
-## 📥 Install
+## Install
 
 1. Download `idlix-mobile-v*.apk` from the [releases page](https://github.com/trefeon/idlix-mobile/releases).
 2. Open the file on your phone/tablet and allow *Install unknown apps* when prompted (Xiaomi/MIUI: enable **Install via USB** in Developer Options for ADB installs).
 3. On first launch the app resolves the current mirror automatically.
 
-> ⚠️ **Upgrading from v1.0.0?** Uninstall the old app first — v1.0.0 was unsigned and Android refuses to install the signed v1.0.1+ over it. Local history is cleared on uninstall.
+> **Note — upgrading from v1.0.0:** Uninstall the old app first — v1.0.0 was unsigned and Android refuses to install the signed v1.0.1+ over it. Local history is cleared on uninstall.
 
 ---
 
-## 🛠️ Build from source
+## Build from source
 
 **Prerequisites:** JDK 21, Android SDK (API 35), ~4 GB free disk.
 
@@ -65,7 +67,7 @@ Run the checks before pushing: `./gradlew :core:data:testDebugUnitTest :app:test
 
 ---
 
-## 📁 Project structure
+## Project structure
 
 ```
 idlix-mobile/
@@ -78,12 +80,12 @@ idlix-mobile/
 
 ---
 
-## 🤝 Contributing
+## Contributing
 
 Issues and pull requests are welcome. Please: keep phone layouts one-hand friendly, keep tablet breakpoints (600/840dp) intact, add unit tests for new logic in `core/data`, and never commit `local.properties`, keystores, or API keys.
 
 ---
 
-## ⚖️ License & disclaimer
+## License & disclaimer
 
 MIT — see [LICENSE](./LICENSE). This is an **unofficial third-party client**, not affiliated with or endorsed by IDLIX. All content, artwork, and trademarks belong to their respective owners. Use it in compliance with your local laws and your streaming providers' terms.

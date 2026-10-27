@@ -73,6 +73,17 @@ class SettingsViewModel(
         _isDataSaver.value = enabled
     }
 
+    // Playback: loudness normalizer ("Audio stabilizer"), default ON.
+    private val _isAudioStabilizer = MutableStateFlow(
+        PlayerQualityPrefs.isAudioStabilizer(getApplication())
+    )
+    val isAudioStabilizer: StateFlow<Boolean> = _isAudioStabilizer.asStateFlow()
+
+    fun setAudioStabilizer(enabled: Boolean) {
+        PlayerQualityPrefs.setAudioStabilizer(getApplication(), enabled)
+        _isAudioStabilizer.value = enabled
+    }
+
     fun testSubdl() {
         if (_uiState.value.isTestingSubdl) return
         // Test the key currently in the field: the repository only knows the
