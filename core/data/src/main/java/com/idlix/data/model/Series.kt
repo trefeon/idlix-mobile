@@ -73,7 +73,8 @@ data class SeriesDetail(
     val genres: List<Genre> = emptyList(),
     val seasons: List<Season> = emptyList(),
     val cast: List<CastMember> = emptyList(),
-    val defaultSeason: SeasonDetail? = null
+    val defaultSeason: SeasonDetail? = null,
+    val trailerUrl: String? = null
 ) {
     val fullPosterUrl: String
         get() = if (posterPath != null) "https://image.tmdb.org/t/p/w342$posterPath" else ""

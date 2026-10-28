@@ -7,6 +7,7 @@ import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
+import androidx.media3.common.audio.AudioProcessor
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DataSpec
@@ -15,6 +16,8 @@ import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.TransferListener
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.Renderer
+import androidx.media3.exoplayer.audio.AudioSink
+import androidx.media3.exoplayer.audio.DefaultAudioSink
 import androidx.media3.exoplayer.hls.HlsMediaSource
 import androidx.media3.exoplayer.source.MediaSource
 import androidx.media3.exoplayer.source.MergingMediaSource
@@ -139,8 +142,34 @@ object MediaSourceHelper {
         return MergingMediaSource(hlsSource, subtitleSource)
     }
 
-    fun createRenderersFactory(context: Context): DefaultRenderersFactory {
+    /**
+     * Renderers factory with the stage-1 software normalizer in the PCM path.
+     *
+     * Overrides [DefaultRenderersFactory.buildAudioSink] with the stock body
+     * plus [LoudnessNormalizeProcessor] first in the audio-processor chain;
+     * [LoudnessNormalizeProcessor.setEnabled] flips it live with no rebuild.
+     * Audio offload stays off (never enabled): the processor chain forces the
+     * software path, and our HLS AAC stereo always decodes to PCM, so the
+     * normalizer is guaranteed to see the audio. The session-bound
+     * [AudioStabilizer] effect remains stage-2 for API 28+.
+     */
+    fun createRenderersFactory(
+        context: Context,
+        normalizer: LoudnessNormalizeProcessor
+    ): DefaultRenderersFactory {
         return object : DefaultRenderersFactory(context) {
+            override fun buildAudioSink(
+                context: Context,
+                enableFloatOutput: Boolean,
+                enableAudioTrackPlaybackParams: Boolean
+            ): AudioSink {
+                return DefaultAudioSink.Builder(context)
+                    .setAudioProcessors(arrayOf<AudioProcessor>(normalizer))
+                    .setEnableFloatOutput(enableFloatOutput)
+                    .setEnableAudioTrackPlaybackParams(enableAudioTrackPlaybackParams)
+                    .build()
+            }
+
             override fun buildTextRenderers(
                 context: Context,
                 output: TextOutput,

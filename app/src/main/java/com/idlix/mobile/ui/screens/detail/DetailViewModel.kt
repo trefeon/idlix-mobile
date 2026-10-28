@@ -1,7 +1,6 @@
 package com.idlix.mobile.ui.screens.detail
 
 import android.app.Application
-import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.idlix.data.local.WatchHistoryStore
@@ -14,6 +13,7 @@ import com.idlix.data.model.SubdlSubtitle
 import com.idlix.data.model.SubtitleTrack
 import com.idlix.data.repository.IdlixRepository
 import com.idlix.data.repository.SubdlRepository
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -153,8 +153,9 @@ class DetailViewModel(
                         )
                     }
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
-                Log.e("DetailViewModel", "Error loading detail: ${e.message}", e)
                 _uiState.value = _uiState.value.copy(
                     isLoadingDetail = false,
                     detailError = e.localizedMessage ?: "Network error loading details"
@@ -190,8 +191,9 @@ class DetailViewModel(
                         selectedEpisode = newEpisodes.firstOrNull()
                     )
                 }
-            } catch (e: Exception) {
-                Log.w("DetailViewModel", "Failed to fetch episodes for season ${season.seasonNumber}: ${e.message}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
             }
         }
     }
@@ -485,8 +487,9 @@ class DetailViewModel(
                         _uiState.value = _uiState.value.copy(nextEpisode = null)
                     }
                 }
-            } catch (e: Exception) {
-                Log.w("DetailViewModel", "Failed to resolve next episode: ${e.message}")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
             }
         }
     }

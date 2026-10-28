@@ -2,7 +2,6 @@ package com.idlix.mobile.player
 
 import android.media.audiofx.DynamicsProcessing
 import android.os.Build
-import android.util.Log
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 
@@ -27,7 +26,7 @@ import androidx.media3.exoplayer.ExoPlayer
  * Vendor-config fallback: if the tuned [DynamicsProcessing.Config] is rejected
  * ([IllegalArgumentException] / [UnsupportedOperationException]), falls back
  * to the no-arg default config `DynamicsProcessing(sessionId)`. API < 28 is a
- * no-op with a debug log. Enable/disable is idempotent and keyed to the
+ * no-op. Enable/disable is idempotent and keyed to the
  * persisted toggle ([PlayerQualityPrefs.isAudioStabilizer]).
  *
  * Lifecycle: [attach] registers [listener] and binds the current session;
@@ -68,7 +67,6 @@ class AudioStabilizer {
         }
         if (!enabled) return
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) {
-            Log.d(TAG, "Audio stabilizer needs API 28+ (this=${Build.VERSION.SDK_INT}); no-op")
             return
         }
         attachToSession(player.audioSessionId)
@@ -126,7 +124,6 @@ class AudioStabilizer {
             null
         }
         if (created == null) {
-            Log.d(TAG, "Audio stabilizer unavailable on this device; no-op")
             return
         }
         try {
@@ -205,7 +202,6 @@ class AudioStabilizer {
     }
 
     private companion object {
-        const val TAG = "AudioStabilizer"
         const val SESSION_UNSET = -1
     }
 }

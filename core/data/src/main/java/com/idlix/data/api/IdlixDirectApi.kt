@@ -2,6 +2,8 @@ package com.idlix.data.api
 
 import com.idlix.data.model.ClaimRequest
 import com.idlix.data.model.ClaimResponse
+import com.idlix.data.model.CollectionDetailResponse
+import com.idlix.data.model.CollectionListResponse
 import com.idlix.data.model.EpisodeResponse
 import com.idlix.data.model.GenreListResponse
 import com.idlix.data.model.MovieDetail
@@ -181,6 +183,17 @@ open class IdlixDirectApi {
         val body = getJson("api/genres")
         CoreHttp.json.decodeFromString(GenreListResponse.serializer(), body)
     }
+
+    open suspend fun getCollections(): CollectionListResponse = withContext(Dispatchers.IO) {
+        val body = getJson("api/collections")
+        CoreHttp.json.decodeFromString(CollectionListResponse.serializer(), body)
+    }
+
+    open suspend fun getCollectionDetail(slug: String): CollectionDetailResponse =
+        withContext(Dispatchers.IO) {
+            val body = getJson("api/collections/$slug")
+            CoreHttp.json.decodeFromString(CollectionDetailResponse.serializer(), body)
+        }
 
     open suspend fun search(query: String): SearchResponse {
         if (query.isBlank()) return SearchResponse()

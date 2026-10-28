@@ -320,6 +320,18 @@ fun DetailScreen(
                         )
                     }
                     val cert = uiState.movie?.certification ?: uiState.series?.certification
+                    val trailerUrl = (uiState.movie?.trailerUrl ?: uiState.series?.trailerUrl)
+                        ?.takeIf { it.isNotBlank() }
+                    val onTrailerClick: (() -> Unit)? = trailerUrl?.let { url ->
+                        {
+                            try {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                                )
+                            } catch (_: Exception) {
+                            }
+                        }
+                    }
                     val onShareClick = {
                         val sendIntent = Intent().apply {
                             action = Intent.ACTION_SEND
@@ -354,6 +366,7 @@ fun DetailScreen(
                                         onPlayClick = { viewModel.playCurrentMedia() },
                                         isBookmarked = isBookmarked,
                                         onBookmarkToggle = onBookmarkToggle,
+                                        onTrailerClick = onTrailerClick,
                                         onShareClick = onShareClick,
                                         genres = genres,
                                         overview = overview,
@@ -393,6 +406,7 @@ fun DetailScreen(
                                         onPlayClick = { viewModel.playCurrentMedia() },
                                         isBookmarked = isBookmarked,
                                         onBookmarkToggle = onBookmarkToggle,
+                                        onTrailerClick = onTrailerClick,
                                         onShareClick = onShareClick,
                                         genres = genres,
                                         overview = overview,
@@ -575,6 +589,7 @@ private fun DetailInfoColumn(
     onPlayClick: () -> Unit,
     isBookmarked: Boolean,
     onBookmarkToggle: () -> Unit,
+    onTrailerClick: (() -> Unit)? = null,
     onShareClick: () -> Unit,
     genres: List<String>,
     overview: String,
@@ -625,7 +640,7 @@ private fun DetailInfoColumn(
         Spacer(modifier = Modifier.height(14.dp))
 
         Row(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Surface(
@@ -656,8 +671,45 @@ private fun DetailInfoColumn(
                         text = stringResource(if (isBookmarked) R.string.in_my_list else R.string.my_list),
                         color = TextWhite,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+                }
+            }
+
+            if (onTrailerClick != null) {
+                Surface(
+                    color = Color.White.copy(alpha = 0.08f),
+                    shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .clickable(onClick = onTrailerClick)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .heightIn(min = 48.dp)
+                            .padding(horizontal = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = stringResource(R.string.trailer),
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = stringResource(R.string.trailer),
+                            color = TextWhite,
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
             }
 
@@ -687,7 +739,9 @@ private fun DetailInfoColumn(
                         text = stringResource(R.string.share),
                         color = TextWhite,
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }

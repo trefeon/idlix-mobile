@@ -14,7 +14,6 @@
     <string name="update_channel_name">Pembaruan aplikasi</string>
     <string name="update_channel_desc">Notifikasi saat rilis IDLIX baru tersedia</string>
     <string name="update_err_http">Kesalahan server (HTTP %1$d)</string>
-    <string name="update_err_empty">Respons rilis kosong</string>
     <string name="update_err_bad_data">Data rilis rusak</string>
     <string name="update_err_no_asset">Tidak ada file APK pada rilis ini</string>
     <string name="update_err_network">Kesalahan jaringan: %1$s</string>

@@ -14,7 +14,6 @@
     <string name="update_channel_name">App updates</string>
     <string name="update_channel_desc">Notifications when a new IDLIX release is available</string>
     <string name="update_err_http">Server error (HTTP %1$d)</string>
-    <string name="update_err_empty">Empty release response</string>
     <string name="update_err_bad_data">Bad release data</string>
     <string name="update_err_no_asset">No APK asset in this release</string>
     <string name="update_err_network">Network error: %1$s</string>

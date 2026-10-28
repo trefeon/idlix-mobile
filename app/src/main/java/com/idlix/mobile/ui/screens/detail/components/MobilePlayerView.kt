@@ -55,12 +55,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.C
 import androidx.media3.common.Player
 import androidx.media3.common.VideoSize
@@ -78,6 +81,7 @@ import com.idlix.data.model.SubtitleTrack
 import com.idlix.mobile.R
 import com.idlix.mobile.player.MediaSourceHelper
 import com.idlix.mobile.player.AudioStabilizer
+import com.idlix.mobile.player.LoudnessNormalizeProcessor
 import com.idlix.mobile.player.PipController
 import com.idlix.mobile.player.PlayerQualityPrefs
 import com.idlix.mobile.ui.screens.detail.NextEpisodeInfo
@@ -207,8 +211,10 @@ fun MobilePlayerView(
     var qualitySheetStartAtSpeed by remember { mutableStateOf(false) }
     val effectiveQuality = PlayerQualityPrefs.effectiveQuality(requestedQuality, isDataSaver)
 
-    // Loudness normalizer ("Audio stabilizer"): session-bound INSERT effect.
+    // Loudness normalizer ("Audio stabilizer"): software stage-1 in the PCM
+    // path + session-bound stage-2 INSERT effect. Both key off one pref.
     val audioStabilizer = remember { AudioStabilizer() }
+    val loudnessNormalizer = remember { LoudnessNormalizeProcessor() }
     var stabilizerEnabled by remember { mutableStateOf(PlayerQualityPrefs.isAudioStabilizer(context)) }
     // Pick up Data-Saver toggles from Settings while the player is alive.
     DisposableEffect(context) {
@@ -349,7 +355,7 @@ fun MobilePlayerView(
             }
 
             val exoPlayer = remember(context, resolvedStream.hlsMasterUrl) {
-                val renderersFactory = MediaSourceHelper.createRenderersFactory(context)
+                val renderersFactory = MediaSourceHelper.createRenderersFactory(context, loudnessNormalizer)
                 // P0 streaming profile: lean buffers for faster start on mobile networks.
                 val loadControl = DefaultLoadControl.Builder()
                     .setBufferDurationsMs(10000, 30000, 1000, 3000)
@@ -399,8 +405,10 @@ fun MobilePlayerView(
                             )
                         )
                         setPlaybackSpeed(PlayerQualityPrefs.getSpeed(context))
-                        // Loudness normalizer: registers the session listener now
-                        // so the effect binds as soon as the audio session appears.
+                        // Loudness normalizer: stage-1 software gain in the PCM
+                        // path (live-toggleable, no rebuild) + stage-2 session
+                        // effect binds as soon as the audio session appears.
+                        loudnessNormalizer.setEnabled(PlayerQualityPrefs.isAudioStabilizer(context))
                         audioStabilizer.attach(this, PlayerQualityPrefs.isAudioStabilizer(context))
 
                         prepare()
@@ -455,9 +463,11 @@ fun MobilePlayerView(
             LaunchedEffect(exoPlayer) {
                 activePlayer = exoPlayer
             }
-            // Stabilizer toggle applies live (Settings flip while playing).
+            // Stabilizer toggle applies live (Settings flip while playing):
+            // stage-1 flips in the PCM path (no rebuild), stage-2 re-binds.
             LaunchedEffect(stabilizerEnabled) {
                 try {
+                    loudnessNormalizer.setEnabled(stabilizerEnabled)
                     audioStabilizer.setEnabled(stabilizerEnabled)
                 } catch (_: Exception) {}
             }
@@ -521,7 +531,8 @@ fun MobilePlayerView(
                 onPlayNextEpisode()
             }
 
-            DisposableEffect(exoPlayer) {
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(exoPlayer, lifecycleOwner) {
                 // Reads TRACK_TYPE_AUDIO groups into picker options.
                 fun refreshAudioOptions() {
                     try {
@@ -563,12 +574,29 @@ fun MobilePlayerView(
                         refreshAudioOptions()
                     }
                 }
+                val lifecycleObserver = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_STOP) {
+                        try {
+                            exoPlayer.pause()
+                            showControls = true
+                            val pos = exoPlayer.currentPosition
+                            val dur = exoPlayer.duration
+                            if (dur > 0) {
+                                onSaveProgress(pos, dur)
+                            }
+                        } catch (_: Exception) {}
+                    }
+                }
                 exoPlayer.addListener(listener)
+                lifecycleOwner.lifecycle.addObserver(lifecycleObserver)
                 // Lets MainActivity.onUserLeaveHint pause playback on Home/recents.
                 // isPlaying/progress keep flowing through the existing listener + poller.
                 PipController.onPauseRequested = { exoPlayer.pause() }
 
                 onDispose {
+                    try {
+                        lifecycleOwner.lifecycle.removeObserver(lifecycleObserver)
+                    } catch (_: Exception) {}
                     try {
                         exoPlayer.removeListener(listener)
                         val finalPos = exoPlayer.currentPosition
@@ -593,6 +621,7 @@ fun MobilePlayerView(
                         player = exoPlayer
                         useController = false
                         keepScreenOn = true
+                        applyVideoZoom(this, zoomState.value)
                         playerViewRef = this
                         post { refreshPipHint(this) }
                         subtitleView?.let { subs ->
@@ -665,7 +694,8 @@ fun MobilePlayerView(
                                 onDoubleTap = { offset ->
                                     val isRight = offset.x >= size.width / 2
                                     val delta = if (isRight) 10_000L else -10_000L
-                                    val targetPos = (exoPlayer.currentPosition + delta).coerceIn(0L, exoPlayer.duration.coerceAtLeast(0L))
+                                    val maxPos = exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                                    val targetPos = (exoPlayer.currentPosition + delta).coerceIn(0L, maxPos)
                                     exoPlayer.seekTo(targetPos)
                                     doubleTapSeekFeedback = if (isRight) 10 else -10
                                     userInteractionCount++
@@ -787,12 +817,14 @@ fun MobilePlayerView(
                         userInteractionCount++
                     },
                     onSeekBy = { deltaMs ->
-                        val target = (exoPlayer.currentPosition + deltaMs).coerceIn(0L, exoPlayer.duration.coerceAtLeast(0L))
+                        val maxPos = exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                        val target = (exoPlayer.currentPosition + deltaMs).coerceIn(0L, maxPos)
                         exoPlayer.seekTo(target)
                         userInteractionCount++
                     },
                     onSeekTo = { targetMs ->
-                        exoPlayer.seekTo(targetMs)
+                        val maxPos = exoPlayer.duration.takeIf { it > 0L } ?: Long.MAX_VALUE
+                        exoPlayer.seekTo(targetMs.coerceIn(0L, maxPos))
                         userInteractionCount++
                     },
                     onToggleFullscreen = onToggleFullscreen,

@@ -3,9 +3,44 @@ package com.idlix.mobile.startup
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.annotation.VisibleForTesting
+import androidx.work.Constraints
+import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import androidx.work.WorkerParameters
+import com.idlix.data.net.IdlixDomainResolver
 import com.idlix.mobile.BuildConfig
 import java.io.File
 import java.util.concurrent.TimeUnit
+
+/**
+ * Background worker that retries [IdlixDomainResolver.resolve] when the initial
+ * startup probe fell back to [IdlixDomainResolver.FALLBACK_URL].
+ */
+class ResolverRetryWorker(
+    appContext: Context,
+    params: WorkerParameters
+) : CoroutineWorker(appContext, params) {
+
+    override suspend fun doWork(): Result {
+        return try {
+            val resolved = IdlixDomainResolver.resolve(forceRefresh = true)
+            if (resolved == IdlixDomainResolver.FALLBACK_URL) {
+                Result.retry()
+            } else {
+                Result.success()
+            }
+        } catch (t: Throwable) {
+            try {
+                ErrorLog.append(applicationContext, t, "resolver-retry-worker")
+            } catch (_: Throwable) {
+            }
+            Result.retry()
+        }
+    }
+}
 
 /**
  * Headless startup hardening. Runs first in `IdlixMobileApp.onCreate`, before
@@ -25,9 +60,6 @@ object StartupRepair {
     private const val PREFS_STARTUP = "idlix_startup"
     private const val KEY_MIGRATED_VERSION = "startup_migrated_version"
 
-    /** Fully-qualified name of the Update slice's worker; loaded reflectively so this
-     *  slice has no compile dependency on `update/` and no work-runtime dependency. */
-    private const val UPDATE_WORKER_CLASS = "com.idlix.mobile.update.UpdateCheckWorker"
     private const val RESOLVER_RETRY_WORK = "idlix_resolver_retry"
 
     @Volatile
@@ -207,38 +239,27 @@ object StartupRepair {
     }
 
     /**
-     * Schedules a resolver retry [delayHours] out via the Update slice's
-     * `UpdateCheckWorker`, loaded purely by name. Silent no-op when work-runtime
-     * or the worker class is absent — never throws.
+     * Schedules a resolver retry [delayHours] out via [ResolverRetryWorker]
+     * when the initial startup probe fell back to [IdlixDomainResolver.FALLBACK_URL].
+     * Silent no-op when work-runtime is absent — never throws.
      */
     fun scheduleResolverRetry(context: Context, delayHours: Long = 6) {
         try {
             if (!isWorkAvailable()) return
-            val workerClass = try {
-                Class.forName(UPDATE_WORKER_CLASS)
-            } catch (_: Throwable) {
-                return // Update slice worker not present yet; silent.
-            }
-            val wmClass = Class.forName("androidx.work.WorkManager")
-            val wm = wmClass.getMethod("getInstance", Context::class.java)
-                .invoke(null, context.applicationContext) ?: return
-
-            val builderClass = Class.forName("androidx.work.OneTimeWorkRequest\$Builder")
-            val builder = builderClass.getConstructor(Class::class.java).newInstance(workerClass)
-            builderClass.getMethod(
-                "setInitialDelay", java.lang.Long.TYPE, TimeUnit::class.java
-            ).invoke(builder, delayHours, TimeUnit.HOURS)
-            val request = builderClass.getMethod("build").invoke(builder)
-
-            val existingWorkPolicy = Class.forName("androidx.work.ExistingWorkPolicy")
-            val keep = java.lang.Enum.valueOf(
-                existingWorkPolicy as Class<out Enum<*>>, "KEEP"
-            )
-            val workRequestClass = Class.forName("androidx.work.WorkRequest")
-            wmClass.getMethod(
-                "enqueueUniqueWork",
-                String::class.java, existingWorkPolicy, workRequestClass
-            ).invoke(wm, RESOLVER_RETRY_WORK, keep, request)
+            val request = OneTimeWorkRequestBuilder<ResolverRetryWorker>()
+                .setInitialDelay(delayHours, TimeUnit.HOURS)
+                .setConstraints(
+                    Constraints.Builder()
+                        .setRequiredNetworkType(NetworkType.CONNECTED)
+                        .build()
+                )
+                .build()
+            WorkManager.getInstance(context.applicationContext)
+                .enqueueUniqueWork(
+                    RESOLVER_RETRY_WORK,
+                    ExistingWorkPolicy.KEEP,
+                    request
+                )
         } catch (_: Throwable) {
             // Silent: retry scheduling is best-effort on lean mobile builds.
         }
